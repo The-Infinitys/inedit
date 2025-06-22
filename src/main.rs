@@ -1,13 +1,12 @@
-mod app;
-mod event_handler;
-
-use app::{App, ui};
+use app::App;
 use crossterm::{
-    terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     execute,
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use inedit::{app, event_handler, ui};
 use ratatui::prelude::*;
-use std::io::{self, stdout, Stdout};
+use std::io::{self, Stdout, stdout};
+use ui::ui; // ← ui関数をインポート
 
 fn main() -> io::Result<()> {
     enable_raw_mode()?;
@@ -19,7 +18,9 @@ fn main() -> io::Result<()> {
     let mut app = App::new();
 
     while !app.should_quit {
-        terminal.draw(|f| ui::<CrosstermBackend<Stdout>>(f, &app)).unwrap();
+        terminal
+            .draw(|f| ui::<CrosstermBackend<Stdout>>(f, &app))
+            .unwrap();
         event_handler::handle_events(&mut app)?;
     }
 
