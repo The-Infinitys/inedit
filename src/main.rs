@@ -11,22 +11,25 @@ use std::io::{self, Write, stdout};
 use ui::ui;
 use uuid::Uuid;
 use uuid::uuid;
-
 fn generate_tmp_path(original_path: Option<&String>) -> Option<String> {
+    use std::path::PathBuf;
     if let Some(orig) = original_path {
-        let abs_path = std::fs::canonicalize(orig).ok()?;
+        let abs_path = if PathBuf::from(orig).is_absolute() {
+            PathBuf::from(orig)
+        } else {
+            std::env::current_dir().ok()?.join(orig)
+        };
         let abs_str = abs_path.to_string_lossy();
-        // UUIDv5: NAMESPACE_URLを使い絶対パスから生成
         let uuid = Uuid::new_v5(
             &uuid!("6ba7b811-9dad-11d1-80b4-00c04fd430c8"),
             abs_str.as_bytes(),
         );
+        // file_nameがNoneなら"untitled"を使う
+        let file_stem = abs_path.file_name()
+            .map(|s| s.to_string_lossy())
+            .unwrap_or_else(|| "untitled".into());
         let mut p = abs_path.clone();
-        p.set_file_name(format!(
-            ".inedit_tmp_{}_{}",
-            p.file_name()?.to_string_lossy(),
-            uuid
-        ));
+        p.set_file_name(format!(".inedit_tmp_{}_{}", file_stem, uuid));
         Some(p.to_string_lossy().to_string())
     } else {
         Some(format!(".inedit_tmp_{}", Uuid::new_v4()))
@@ -40,32 +43,36 @@ fn create_tmp_file(original_path: Option<&String>, buffer: &str) -> Option<Strin
 }
 
 fn main() -> io::Result<()> {
-    // コマンドライン引数の取得
     let args: Vec<String> = env::args().collect();
-    let buffer = if args.len() > 1 {
-        // ファイルパスが指定されていれば読み込む
-        fs::read_to_string(&args[1]).unwrap_or_else(|_| String::new())
-    } else {
-        // 指定がなければ空バッファ
-        String::new()
-    };
-
-    enable_raw_mode()?;
-    let mut stdout = stdout();
-    execute!(stdout, EnterAlternateScreen)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    // App::new()にbufferを渡す設計に今後拡張可能
+    // ファイル引数がなければ Untitled-{number}.txt を生成
     let file_path = if args.len() > 1 {
         Some(args[1].clone())
     } else {
-        None
+        // 既存の Untitled-*.txt を探して重複しない番号を付与
+        let mut n = 1;
+        let file_name = loop {
+            let name = format!("Untitled-{}.txt", n);
+            if !std::path::Path::new(&name).exists() {
+                break name;
+            }
+            n += 1;
+        };
+        Some(file_name)
     };
+
+    let mut buffer = if let Some(ref path) = file_path {
+        if std::path::Path::new(path).exists() {
+            fs::read_to_string(path).unwrap_or_default()
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
     let tmp_file_path = generate_tmp_path(file_path.as_ref());
 
     // 仮ファイルが存在する場合、復元するか確認
-    let mut buffer = buffer;
     let mut use_tmp_file_path = tmp_file_path.clone();
     if let Some(ref tmp_path) = tmp_file_path {
         if std::path::Path::new(tmp_path).exists() {
@@ -89,6 +96,12 @@ fn main() -> io::Result<()> {
 
     let mut app = App::new(buffer, file_path, use_tmp_file_path);
 
+    enable_raw_mode()?;
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
     while !app.should_quit {
         let mut editor_height = 0;
         terminal
@@ -103,10 +116,15 @@ fn main() -> io::Result<()> {
                     ])
                     .split(size);
                 editor_height = chunks[1].height as usize;
-                ui(f, &mut app); // ← ジェネリクスを削除
+                ui(f, &mut app);
             })
             .unwrap();
         event_handler::handle_events(&mut app, editor_height)?;
+    }
+
+    // 終了時に一時ファイルを削除
+    if let Some(ref tmp_path) = app.tmp_file_path {
+        let _ = fs::remove_file(tmp_path);
     }
 
     disable_raw_mode()?;

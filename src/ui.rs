@@ -14,7 +14,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         ])
         .split(size);
 
-    f.render_widget(top_bar(), chunks[0]);
+    f.render_widget(top_bar(app, size.width), chunks[0]);
     middle_box(f, chunks[1], app); // ← 修正
     f.render_widget(bottom_bar(), chunks[2]);
 
