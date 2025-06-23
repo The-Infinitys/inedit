@@ -15,11 +15,9 @@ pub struct Editor {
     pub current_search_idx: Option<usize>, // 現在の検索結果のインデックス
 }
 
-
 impl Editor {
     /// 新しいエディタを作成します。
     pub fn new(initial_text: String) -> Self {
-        
         Self {
             buffer: initial_text,
             cursor: Cursor::new(0, 0),
@@ -290,9 +288,8 @@ impl Editor {
     /// 現在のカーソル位置をバイトオフセットに変換します。
     fn get_cursor_byte_offset(&self) -> usize {
         let mut offset = 0;
-        let mut current_y = 0;
-        for line in self.buffer.lines() {
-            if current_y == self.cursor.y {
+        for (current_y, line) in self.buffer.lines().enumerate() {
+            if current_y == self.cursor.y as usize {
                 offset += line
                     .chars()
                     .take(self.cursor.x as usize)
@@ -302,7 +299,6 @@ impl Editor {
             }
             offset += line.len();
             offset += 1;
-            current_y += 1;
         }
         offset
     }
@@ -374,7 +370,7 @@ impl Editor {
         if direction == 1 {
             // Forward search (from cursor to end)
             // Current line
-            for x_idx in current_x..current_line_chars.len() {
+            for (x_idx, _item) in current_line_chars.iter().enumerate().skip(current_x) {
                 if current_line_chars[x_idx] == open_paren {
                     balance += 1;
                 } else if current_line_chars[x_idx] == close_paren {
@@ -385,9 +381,9 @@ impl Editor {
                 }
             }
             // Subsequent lines
-            for y_idx in (current_y + 1)..lines.len() {
+            for (y_idx, _item) in lines.iter().enumerate().skip(current_y + 1) {
                 let line_chars: Vec<char> = lines[y_idx].chars().collect();
-                for x_idx in 0..line_chars.len() {
+                for (x_idx, _item) in line_chars.iter().enumerate() {
                     if line_chars[x_idx] == open_paren {
                         balance += 1;
                     } else if line_chars[x_idx] == close_paren {
@@ -401,7 +397,7 @@ impl Editor {
         } else {
             // Backward search (from cursor to beginning)
             // Current line
-            for x_idx in (0..=current_x).rev() {
+            for (x_idx, _item) in current_line_chars.iter().enumerate().skip(current_x) {
                 // Include current_x
                 if current_line_chars[x_idx] == close_paren {
                     balance += 1;
