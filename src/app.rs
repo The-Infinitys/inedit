@@ -1,15 +1,16 @@
 pub struct App {
     pub should_quit: bool,
     pub buffer: String,
-    pub file_path: Option<String>, // 追加
-    pub cursor: (usize, usize),    // カーソル位置 (行, 列)
-    pub scroll: usize, // ←追加
-    pub fold_mode: bool, // ←追加
+    pub file_path: Option<String>,                           // 追加
+    pub cursor: (usize, usize),                              // カーソル位置 (行, 列)
+    pub scroll: usize,                                       // ←追加
+    pub fold_mode: bool,                                     // ←追加
     pub selection: Option<((usize, usize), (usize, usize))>, // 選択範囲
-    pub clipboard: Option<String>,           // クリップボード
-    pub undo_stack: Vec<String>,             // Undo用
-    pub redo_stack: Vec<String>,             // Redo用
-    pub tmp_file_path: Option<String>,       // 仮ファイルパス
+    pub clipboard: Option<String>,                           // クリップボード
+    pub undo_stack: Vec<String>,                             // Undo用
+    pub redo_stack: Vec<String>,                             // Redo用
+    pub tmp_file_path: Option<String>,                       // 仮ファイルパス
+    pub is_saved: bool,                                      // ← 追加
 }
 
 impl Default for App {
@@ -32,6 +33,7 @@ impl App {
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             tmp_file_path,
+            is_saved: false, // ← 追加
         }
     }
 }

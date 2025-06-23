@@ -2,10 +2,9 @@ use crate::app::App;
 use ratatui::{
     Frame,
     layout::Rect,
-    text::{Line, Span, Text},
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-
 
 pub fn editor(f: &mut Frame, area: Rect, app: &App, height: usize) {
     use ratatui::style::{Color, Style};
@@ -19,12 +18,12 @@ pub fn editor(f: &mut Frame, area: Rect, app: &App, height: usize) {
         if let Some((start_sel, end_sel)) = selection {
             let (sy, sx) = start_sel;
             let (ey, ex) = end_sel;
-            let (sel_start_line, sel_start_col, sel_end_line, sel_end_col) =
-                if (sy, sx) <= (ey, ex) {
-                    (sy, sx, ey, ex)
-                } else {
-                    (ey, ex, sy, sx)
-                };
+            let (sel_start_line, sel_start_col, sel_end_line, sel_end_col) = if (sy, sx) <= (ey, ex)
+            {
+                (sy, sx, ey, ex)
+            } else {
+                (ey, ex, sy, sx)
+            };
             if global_line >= sel_start_line && global_line <= sel_end_line {
                 let mut spans = Vec::new();
                 let len = line.chars().count();
@@ -58,7 +57,10 @@ pub fn editor(f: &mut Frame, area: Rect, app: &App, height: usize) {
 
     // カーソル位置を設定（行末を超えないように）
     let cursor_y = app.cursor.0.saturating_sub(app.scroll);
-    let line = lines.get(app.cursor.0).map(|l| l.chars().count()).unwrap_or(0);
+    let line = lines
+        .get(app.cursor.0)
+        .map(|l| l.chars().count())
+        .unwrap_or(0);
     let cursor_x = app.cursor.1.min(line);
     if cursor_y < height {
         f.set_cursor_position((area.x + cursor_x as u16, area.y + cursor_y as u16));

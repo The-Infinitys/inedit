@@ -1,14 +1,19 @@
 use crate::app::App;
 use ratatui::{
     style::{Color, Modifier, Style},
-    text::{Span, Line},
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
 
 pub mod diff;
 
 // スクロール位置と高さを考慮して行番号を生成
-fn make_left_line<'a>(buffer: &'a str, diff: Option<&[char]>, scroll: usize, height: usize) -> Vec<Line<'a>> {
+fn make_left_line<'a>(
+    buffer: &'a str,
+    diff: Option<&[char]>,
+    scroll: usize,
+    height: usize,
+) -> Vec<Line<'a>> {
     let mut result = Vec::new();
     let lines: Vec<&str> = buffer.lines().collect();
     let diff = diff.unwrap_or(&[]);
@@ -34,10 +39,7 @@ fn make_left_line<'a>(buffer: &'a str, diff: Option<&[char]>, scroll: usize, hei
                 format!("{:>3}", line_num),
                 Style::default().fg(color).add_modifier(underline),
             ),
-            Span::styled(
-                diff_mark.to_string(),
-                Style::default().fg(color),
-            ),
+            Span::styled(diff_mark.to_string(), Style::default().fg(color)),
         ]));
     }
     result

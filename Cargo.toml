@@ -8,3 +8,12 @@ colored = "3.0.0"
 crossterm = "0.29.0"
 git2 = "0.20.2"
 ratatui = { version = "0.29.0", features = ["all-widgets"] }
+uuid = { version = "1.17.0", features = [
+    "v1",
+    "v3",
+    "v4",
+    "v5",
+    "v6",
+    "v7",
+    "v8",
+] }

@@ -9,7 +9,9 @@ pub fn get_diff_marks<P: AsRef<Path>>(file_path: P, buffer: &str) -> Option<Vec<
     opts.pathspec(rel_path);
 
     let head = repo.head().ok()?.peel_to_tree().ok()?;
-    let diff = repo.diff_tree_to_workdir_with_index(Some(&head), Some(&mut opts)).ok()?;
+    let diff = repo
+        .diff_tree_to_workdir_with_index(Some(&head), Some(&mut opts))
+        .ok()?;
 
     // bufferの行数を数える（日本語対応のためlines()でOK）
     let mut marks = vec![' '; buffer.lines().count()];
@@ -54,7 +56,8 @@ pub fn get_diff_marks<P: AsRef<Path>>(file_path: P, buffer: &str) -> Option<Vec<
             }
             true
         }),
-    ).ok()?;
+    )
+    .ok()?;
 
     Some(marks)
 }

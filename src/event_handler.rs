@@ -12,19 +12,25 @@ pub fn handle_events(app: &mut App, view_height: usize) -> io::Result<()> {
             let mut push_undo = false;
 
             match key.code {
-                KeyCode::Char('z') if ctrl && !shift => { // Ctrl+z
+                KeyCode::Char('w') if ctrl => {
+                    app.should_quit = true;
+                }
+                KeyCode::Char('z') if ctrl && !shift => {
+                    // Ctrl+z
                     if let Some(prev) = app.undo_stack.pop() {
                         app.redo_stack.push(app.buffer.clone());
                         app.buffer = prev;
                     }
                 }
-                KeyCode::Char('z') if ctrl && shift => { // Ctrl+Shift+z
+                KeyCode::Char('z') if ctrl && shift => {
+                    // Ctrl+Shift+z
                     if let Some(next) = app.redo_stack.pop() {
                         app.undo_stack.push(app.buffer.clone());
                         app.buffer = next;
                     }
                 }
-                KeyCode::Char('x') if ctrl => { // Ctrl+x
+                KeyCode::Char('x') if ctrl => {
+                    // Ctrl+x
                     if let Some((start, end)) = app.selection.take() {
                         let (sy, sx, ey, ex) = normalize_sel(start, end);
                         let (new_buffer, selected) = cut_selection(&app.buffer, sy, sx, ey, ex);
@@ -34,14 +40,16 @@ pub fn handle_events(app: &mut App, view_height: usize) -> io::Result<()> {
                         app.cursor = (sy, sx);
                     }
                 }
-                KeyCode::Char('c') if ctrl => { // Ctrl+c
+                KeyCode::Char('c') if ctrl => {
+                    // Ctrl+c
                     if let Some((start, end)) = app.selection {
                         let (sy, sx, ey, ex) = normalize_sel(start, end);
                         let selected = get_selection(&app.buffer, sy, sx, ey, ex);
                         app.clipboard = Some(selected);
                     }
                 }
-                KeyCode::Char('v') if ctrl => { // Ctrl+v
+                KeyCode::Char('v') if ctrl => {
+                    // Ctrl+v
                     if let Some(ref clip) = app.clipboard {
                         push_undo = true;
                         if let Some((start, end)) = app.selection.take() {
@@ -52,29 +60,26 @@ pub fn handle_events(app: &mut App, view_height: usize) -> io::Result<()> {
                             app.buffer = insert_at(&app.buffer, app.cursor.0, app.cursor.1, clip);
                             app.cursor.1 += clip.chars().count();
                         }
+                        app.is_saved = false;
                     }
                 }
-                KeyCode::Char('s') if ctrl => { // Ctrl+s
-                    let save_path = if let Some(ref tmp_path) = app.tmp_file_path {
-                        tmp_path.clone()
-                    } else if let Some(ref file_path) = app.file_path {
+                KeyCode::Char('s') if ctrl => {
+                    let save_path = if let Some(ref file_path) = app.file_path {
                         file_path.clone()
                     } else {
                         print!("保存先のパスを入力してください: ");
                         io::stdout().flush().ok();
                         let mut input = String::new();
                         io::stdin().read_line(&mut input).ok();
-                        input.trim().to_string()
+                        let path = input.trim().to_string();
+                        app.file_path = Some(path.clone());
+                        path
                     };
                     std::fs::write(&save_path, &app.buffer).ok();
-                    if app.file_path.is_none() {
-                        app.file_path = Some(save_path.clone());
-                    }
-                    if app.tmp_file_path.is_none() {
-                        app.tmp_file_path = Some(save_path);
-                    }
+                    app.is_saved = true;
                 }
-                KeyCode::Char(c) if !ctrl => { // 通常の文字入力
+                KeyCode::Char(c) if !ctrl => {
+                    // 通常の文字入力
                     push_undo = true;
                     if let Some((start, end)) = app.selection.take() {
                         let (sy, sx, ey, ex) = normalize_sel(start, end);
@@ -84,15 +89,142 @@ pub fn handle_events(app: &mut App, view_height: usize) -> io::Result<()> {
                             app.buffer = replace_selection(&app.buffer, sy, sx, ey, ex, &wrapped);
                             app.cursor = (sy, sx + 1 + selected.chars().count());
                         } else {
-                            app.buffer = replace_selection(&app.buffer, sy, sx, ey, ex, &c.to_string());
+                            app.buffer =
+                                replace_selection(&app.buffer, sy, sx, ey, ex, &c.to_string());
                             app.cursor = (sy, sx + 1);
                         }
                     } else {
-                        app.buffer = insert_at(&app.buffer, app.cursor.0, app.cursor.1, &c.to_string());
+                        app.buffer =
+                            insert_at(&app.buffer, app.cursor.0, app.cursor.1, &c.to_string());
                         app.cursor.1 += 1;
                     }
+                    app.is_saved = false;
                 }
-                // ...他のキー処理...
+                KeyCode::Backspace => {
+                    push_undo = true;
+                    if let Some((start, end)) = app.selection.take() {
+                        let (sy, sx, ey, ex) = normalize_sel(start, end);
+                        app.buffer = replace_selection(&app.buffer, sy, sx, ey, ex, "");
+                        app.cursor = (sy, sx);
+                    } else if app.cursor.1 > 0 {
+                        let y = app.cursor.0;
+                        let x = app.cursor.1;
+                        app.buffer = replace_selection(&app.buffer, y, x - 1, y, x, "");
+                        app.cursor.1 -= 1;
+                    } else if app.cursor.0 > 0 {
+                        // 行頭でBackspace: 前の行と結合
+                        let y = app.cursor.0;
+                        let prev_line_len = app
+                            .buffer
+                            .lines()
+                            .nth(y - 1)
+                            .map(|l| l.chars().count())
+                            .unwrap_or(0);
+                        app.buffer = replace_selection(&app.buffer, y - 1, prev_line_len, y, 0, "");
+                        app.cursor.0 -= 1;
+                        app.cursor.1 = prev_line_len;
+                    }
+                    app.is_saved = false;
+                }
+                KeyCode::Enter => {
+                    push_undo = true;
+                    if let Some((start, end)) = app.selection.take() {
+                        let (sy, sx, ey, ex) = normalize_sel(start, end);
+                        app.buffer = replace_selection(&app.buffer, sy, sx, ey, ex, "\n");
+                        app.cursor = (sy, sx + 1);
+                    } else {
+                        app.buffer = insert_at(&app.buffer, app.cursor.0, app.cursor.1, "\n");
+                        app.cursor.0 += 1;
+                        app.cursor.1 = 0;
+                    }
+                }
+                KeyCode::Left => {
+                    if app.cursor.1 > 0 {
+                        app.cursor.1 -= 1;
+                    } else if app.cursor.0 > 0 {
+                        app.cursor.0 -= 1;
+                        app.cursor.1 = app
+                            .buffer
+                            .lines()
+                            .nth(app.cursor.0)
+                            .map(|l| l.chars().count())
+                            .unwrap_or(0);
+                    }
+                    if shift {
+                        let sel_start = app.selection.map(|(s, _)| s).unwrap_or(app.cursor);
+                        app.selection = Some((sel_start, app.cursor));
+                    } else {
+                        app.selection = None;
+                    }
+                }
+                KeyCode::Right => {
+                    let line = app.buffer.lines().nth(app.cursor.0).unwrap_or("");
+                    if app.cursor.1 < line.chars().count() {
+                        app.cursor.1 += 1;
+                    } else if app.cursor.0 + 1 < app.buffer.lines().count() {
+                        app.cursor.0 += 1;
+                        app.cursor.1 = 0;
+                    }
+                    if shift {
+                        let sel_start = app.selection.map(|(s, _)| s).unwrap_or(app.cursor);
+                        app.selection = Some((sel_start, app.cursor));
+                    } else {
+                        app.selection = None;
+                    }
+                }
+                KeyCode::Up => {
+                    if app.cursor.0 > 0 {
+                        app.cursor.0 -= 1;
+                        let line = app.buffer.lines().nth(app.cursor.0).unwrap_or("");
+                        app.cursor.1 = app.cursor.1.min(line.chars().count());
+                        if app.cursor.0 < app.scroll {
+                            app.scroll = app.cursor.0;
+                        }
+                    }
+                    if shift {
+                        let sel_start = app.selection.map(|(s, _)| s).unwrap_or(app.cursor);
+                        app.selection = Some((sel_start, app.cursor));
+                    } else {
+                        app.selection = None;
+                    }
+                }
+                KeyCode::Down => {
+                    let max = app.buffer.lines().count().saturating_sub(1);
+                    if app.cursor.0 < max {
+                        app.cursor.0 += 1;
+                        let line = app.buffer.lines().nth(app.cursor.0).unwrap_or("");
+                        app.cursor.1 = app.cursor.1.min(line.chars().count());
+                        let view_bottom = app.scroll + view_height;
+                        if app.cursor.0 >= view_bottom {
+                            app.scroll = app.cursor.0 + 1 - view_height;
+                        }
+                    }
+                    if shift {
+                        let sel_start = app.selection.map(|(s, _)| s).unwrap_or(app.cursor);
+                        app.selection = Some((sel_start, app.cursor));
+                    } else {
+                        app.selection = None;
+                    }
+                }
+                KeyCode::Home => {
+                    app.cursor.1 = 0;
+                    if shift {
+                        let sel_start = app.selection.map(|(s, _)| s).unwrap_or(app.cursor);
+                        app.selection = Some((sel_start, app.cursor));
+                    } else {
+                        app.selection = None;
+                    }
+                }
+                KeyCode::End => {
+                    let line = app.buffer.lines().nth(app.cursor.0).unwrap_or("");
+                    app.cursor.1 = line.chars().count();
+                    if shift {
+                        let sel_start = app.selection.map(|(s, _)| s).unwrap_or(app.cursor);
+                        app.selection = Some((sel_start, app.cursor));
+                    } else {
+                        app.selection = None;
+                    }
+                }
                 _ => {}
             }
 
@@ -105,23 +237,30 @@ pub fn handle_events(app: &mut App, view_height: usize) -> io::Result<()> {
     Ok(())
 }
 
-// 選択範囲の正規化
+// --- 以下は補助関数（省略せずにそのまま使ってください） ---
+
 fn normalize_sel(a: (usize, usize), b: (usize, usize)) -> (usize, usize, usize, usize) {
-    if a < b { (a.0, a.1, b.0, b.1) } else { (b.0, b.1, a.0, a.1) }
+    if a < b {
+        (a.0, a.1, b.0, b.1)
+    } else {
+        (b.0, b.1, a.0, a.1)
+    }
 }
 
-// 選択範囲のテキスト取得
 fn get_selection(buffer: &str, sy: usize, sx: usize, ey: usize, ex: usize) -> String {
     let lines: Vec<&str> = buffer.lines().collect();
     if sy == ey {
-        lines.get(sy).map(|l| l.chars().skip(sx).take(ex - sx).collect()).unwrap_or_default()
+        lines
+            .get(sy)
+            .map(|l| l.chars().skip(sx).take(ex - sx).collect())
+            .unwrap_or_default()
     } else {
         let mut result = String::new();
         if let Some(line) = lines.get(sy) {
             result.push_str(&line.chars().skip(sx).collect::<String>());
             result.push('\n');
         }
-        for i in sy+1..ey {
+        for i in sy + 1..ey {
             if let Some(line) = lines.get(i) {
                 result.push_str(line);
                 result.push('\n');
@@ -134,15 +273,20 @@ fn get_selection(buffer: &str, sy: usize, sx: usize, ey: usize, ex: usize) -> St
     }
 }
 
-// 選択範囲のテキストを削除し、削除部分を返す
 fn cut_selection(buffer: &str, sy: usize, sx: usize, ey: usize, ex: usize) -> (String, String) {
     let selected = get_selection(buffer, sy, sx, ey, ex);
     let new_buffer = replace_selection(buffer, sy, sx, ey, ex, "");
     (new_buffer, selected)
 }
 
-// 選択範囲のテキストを置換
-fn replace_selection(buffer: &str, sy: usize, sx: usize, ey: usize, ex: usize, text: &str) -> String {
+fn replace_selection(
+    buffer: &str,
+    sy: usize,
+    sx: usize,
+    ey: usize,
+    ex: usize,
+    text: &str,
+) -> String {
     let mut lines: Vec<String> = buffer.lines().map(|l| l.to_string()).collect();
     if sy == ey {
         if let Some(line) = lines.get_mut(sy) {
@@ -159,7 +303,7 @@ fn replace_selection(buffer: &str, sy: usize, sx: usize, ey: usize, ex: usize, t
         }
         new_lines.extend(text.lines().map(|l| l.to_string()));
         if let Some(line) = lines.get_mut(ey) {
-            let mut chars: Vec<char> = line.chars().collect();
+            let chars: Vec<char> = line.chars().collect();
             let tail: String = chars.into_iter().skip(ex).collect();
             if let Some(last) = new_lines.last_mut() {
                 last.push_str(&tail);
@@ -170,20 +314,32 @@ fn replace_selection(buffer: &str, sy: usize, sx: usize, ey: usize, ex: usize, t
     lines.join("\n")
 }
 
-// 挿入
 fn insert_at(buffer: &str, y: usize, x: usize, text: &str) -> String {
     replace_selection(buffer, y, x, y, x, text)
 }
 
-// 括弧判定
 fn is_bracket(c: char) -> bool {
-    matches!(c, '(' | '[' | '{' | '（' | '「' | '『' | '【' | '＜' | '〈' | '《' | '〔' | '｛' | '“' | '‘')
+    matches!(
+        c,
+        '(' | '[' | '{' | '（' | '「' | '『' | '【' | '＜' | '〈' | '《' | '〔' | '｛' | '“' | '‘'
+    )
 }
 fn matching_bracket(c: char) -> char {
     match c {
-        '(' => ')', '[' => ']', '{' => '}',
-        '（' => '）', '「' => '」', '『' => '』', '【' => '】', '＜' => '＞', '〈' => '〉', '《' => '》', '〔' => '〕', '｛' => '｝',
-        '“' => '”', '‘' => '’',
+        '(' => ')',
+        '[' => ']',
+        '{' => '}',
+        '（' => '）',
+        '「' => '」',
+        '『' => '』',
+        '【' => '】',
+        '＜' => '＞',
+        '〈' => '〉',
+        '《' => '》',
+        '〔' => '〕',
+        '｛' => '｝',
+        '“' => '”',
+        '‘' => '’',
         _ => c,
     }
 }

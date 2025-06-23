@@ -1,9 +1,9 @@
-use ratatui::{
-    widgets::{Block, Borders, Paragraph},
-    text::{Span, Line},
-    style::{Color, Style},
-};
 use crate::app::App;
+use ratatui::{
+    style::{Color, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, Paragraph},
+};
 
 // 右情報（スクロールバー＋diff色付き）
 pub fn right_line<'a>(app: &App, height: usize, diff: Option<&[char]>) -> Paragraph<'a> {
@@ -24,24 +24,29 @@ pub fn right_line<'a>(app: &App, height: usize, diff: Option<&[char]>) -> Paragr
             bar[i] = '█';
         }
     }
-    let lines: Vec<Line> = bar.iter().enumerate().take(visible).map(|(i, &c)| {
-        let mut span = if c == '█' {
-            Span::styled(c.to_string(), Style::default().fg(Color::Blue))
-        } else {
-            Span::raw(" ")
-        };
-        // diff情報も色付きで表示
-        if let Some(diff) = diff {
-            if let Some(mark) = diff.get(i + scroll) {
-                let color = match mark {
-                    '+' => Color::Green,
-                    '-' => Color::Red,
-                    _ => Color::Reset,
-                };
-                span = Span::styled(mark.to_string(), Style::default().fg(color));
+    let lines: Vec<Line> = bar
+        .iter()
+        .enumerate()
+        .take(visible)
+        .map(|(i, &c)| {
+            let mut span = if c == '█' {
+                Span::styled(c.to_string(), Style::default().fg(Color::Blue))
+            } else {
+                Span::raw(" ")
+            };
+            // diff情報も色付きで表示
+            if let Some(diff) = diff {
+                if let Some(mark) = diff.get(i + scroll) {
+                    let color = match mark {
+                        '+' => Color::Green,
+                        '-' => Color::Red,
+                        _ => Color::Reset,
+                    };
+                    span = Span::styled(mark.to_string(), Style::default().fg(color));
+                }
             }
-        }
-        Line::from(span)
-    }).collect();
+            Line::from(span)
+        })
+        .collect();
     Paragraph::new(lines).block(Block::default().borders(Borders::LEFT))
 }
