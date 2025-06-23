@@ -15,6 +15,6 @@ pub fn ui<B: Backend>(f: &mut Frame, _app: &App) {
         .split(size);
 
     f.render_widget(top_bar(), chunks[0]);
-    f.render_widget(middle_box(), chunks[1]);
+    middle_box::<B>(f, chunks[1]);
     f.render_widget(bottom_bar(), chunks[2]);
 }
