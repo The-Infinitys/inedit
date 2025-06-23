@@ -1,9 +1,4 @@
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout},
-    prelude::*,
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::widgets::{Block, Borders, Paragraph};
 
 // 左行番号
 pub fn left_line<'a>() -> Paragraph<'a> {

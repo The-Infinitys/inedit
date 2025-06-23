@@ -1,9 +1,4 @@
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, Layout},
-    prelude::*,
-    widgets::{Block, Borders, Paragraph},
-};
+use ratatui::widgets::{Block, Borders, Paragraph};
 
 // 右情報
 pub fn right_line<'a>() -> Paragraph<'a> {

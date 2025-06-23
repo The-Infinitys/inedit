@@ -2,7 +2,6 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
     prelude::*,
-    widgets::{Block, Borders, Paragraph},
 };
 
 pub mod editor;
