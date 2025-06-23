@@ -11,6 +11,7 @@ pub struct App {
     pub redo_stack: Vec<String>,                             // Redo用
     pub tmp_file_path: Option<String>,                       // 仮ファイルパス
     pub is_saved: bool,                                      // ← 追加
+    pub diff_cache: Option<(String, Vec<char>)>, // (bufferのハッシュ, diff結果)
 }
 
 impl Default for App {
@@ -34,6 +35,7 @@ impl App {
             redo_stack: Vec::new(),
             tmp_file_path,
             is_saved: false, // ← 追加
+            diff_cache: None, // ← 追加
         }
     }
 }
