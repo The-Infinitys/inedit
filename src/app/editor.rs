@@ -6,6 +6,7 @@ use std::io;
 use std::path::Path;
 
 /// テキストバッファとカーソルを管理し、編集操作を提供します。
+#[derive(Default)]
 pub struct Editor {
     pub buffer: String,
     pub cursor: Cursor,
@@ -14,29 +15,18 @@ pub struct Editor {
     pub current_search_idx: Option<usize>, // 現在の検索結果のインデックス
 }
 
-impl Default for Editor {
-    fn default() -> Self {
-        Self {
-            buffer: String::new(),
-            cursor: Cursor::default(),
-            search_query: String::new(),
-            search_matches: Vec::new(),
-            current_search_idx: None,
-        }
-    }
-}
 
 impl Editor {
     /// 新しいエディタを作成します。
     pub fn new(initial_text: String) -> Self {
-        let mut editor = Self {
+        
+        Self {
             buffer: initial_text,
             cursor: Cursor::new(0, 0),
             search_query: String::new(),
             search_matches: Vec::new(),
             current_search_idx: None,
-        };
-        editor
+        }
     }
 
     /// ファイルからテキストを読み込み、エディタバッファを設定します。
@@ -98,10 +88,8 @@ impl Editor {
             let current_line = lines[current_line_idx];
             if (self.cursor.x as usize) < current_line.chars().count() {
                 self.cursor.next_char();
-            } else {
-                if (current_line_idx + 1) < lines.len() {
-                    self.cursor.next_line();
-                }
+            } else if (current_line_idx + 1) < lines.len() {
+                self.cursor.next_line();
             }
         }
         self.set_cursor_position(self.cursor.x, self.cursor.y);
@@ -114,12 +102,10 @@ impl Editor {
 
         if self.cursor.x > 0 {
             self.cursor.previous_char();
-        } else {
-            if current_line_idx > 0 {
-                self.cursor.previous_line();
-                let prev_line_len = lines[self.cursor.y as usize].chars().count() as u16;
-                self.cursor.set_position(prev_line_len, self.cursor.y);
-            }
+        } else if current_line_idx > 0 {
+            self.cursor.previous_line();
+            let prev_line_len = lines[self.cursor.y as usize].chars().count() as u16;
+            self.cursor.set_position(prev_line_len, self.cursor.y);
         }
         self.set_cursor_position(self.cursor.x, self.cursor.y);
     }

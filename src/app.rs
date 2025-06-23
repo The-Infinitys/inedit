@@ -5,7 +5,7 @@ pub mod features;
 use editor::Editor;
 use std::env;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct App {
     pub editor: Editor,
@@ -62,8 +62,7 @@ impl App {
             eprintln!("File saved to: {:?}", path);
             Ok(())
         } else {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
+            Err(io::Error::other(
                 "No target path set to save the file.",
             ))
         }
