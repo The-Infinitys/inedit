@@ -1,5 +1,5 @@
 use ratatui::prelude::*;
-use crate::components::{bottom_bar::bottom_bar, editor::editor, top_bar::top_bar};
+use crate::components::{bottom_bar::bottom_bar, middle_box::middle_box, top_bar::top_bar};
 use crate::app::App;
 
 pub fn ui<B: Backend>(f: &mut Frame<>, _app: &App) {
@@ -15,6 +15,6 @@ pub fn ui<B: Backend>(f: &mut Frame<>, _app: &App) {
         .split(size);
 
     f.render_widget(top_bar(), chunks[0]);
-    f.render_widget(editor(), chunks[1]);
+    f.render_widget(middle_box(), chunks[1]);
     f.render_widget(bottom_bar(), chunks[2]);
 }
