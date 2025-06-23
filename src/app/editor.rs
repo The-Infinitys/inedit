@@ -46,7 +46,7 @@ impl Editor {
         } else {
             new_x = 0;
         }
-        
+
         self.cursor.set_position(new_x, new_y);
         self.cursor.clear_selection(); // カーソル移動時は選択を解除
     }
@@ -113,7 +113,11 @@ impl Editor {
                     if i == y as usize {
                         // 行の先頭からのバイトオフセットを計算
                         // UTF-8の場合、文字数とバイト数が一致しない場合があるため、chars().take()を使う
-                        offset += line.chars().take(x as usize).map(|c| c.len_utf8()).sum::<usize>();
+                        offset += line
+                            .chars()
+                            .take(x as usize)
+                            .map(|c| c.len_utf8())
+                            .sum::<usize>();
                         break;
                     }
                     offset += line.len(); // 行のバイト長
@@ -228,7 +232,9 @@ impl Editor {
         if current_offset > 0 {
             // UTF-8文字の境界を探す
             let mut char_boundary_offset = current_offset;
-            while char_boundary_offset > 0 && !self.buffer.is_char_boundary(char_boundary_offset - 1) {
+            while char_boundary_offset > 0
+                && !self.buffer.is_char_boundary(char_boundary_offset - 1)
+            {
                 char_boundary_offset -= 1;
             }
             if char_boundary_offset > 0 {
@@ -252,30 +258,40 @@ impl Editor {
             // UTF-8文字の境界を探す
             let mut char_boundary_offset = current_offset;
             // Find the start of the next character
-            while char_boundary_offset < self.buffer.len() && !self.buffer.is_char_boundary(char_boundary_offset) {
+            while char_boundary_offset < self.buffer.len()
+                && !self.buffer.is_char_boundary(char_boundary_offset)
+            {
                 char_boundary_offset += 1;
             }
             // Now char_boundary_offset is at the start of the character to delete
             if char_boundary_offset < self.buffer.len() {
                 // Find the end of the character to delete
                 let next_char_boundary = self.buffer[char_boundary_offset..]
-                                         .chars()
-                                         .next()
-                                         .map_or(char_boundary_offset, |c| char_boundary_offset + c.len_utf8());
-                
-                self.buffer.replace_range(char_boundary_offset..next_char_boundary, "");
+                    .chars()
+                    .next()
+                    .map_or(char_boundary_offset, |c| {
+                        char_boundary_offset + c.len_utf8()
+                    });
+
+                self.buffer
+                    .replace_range(char_boundary_offset..next_char_boundary, "");
                 // カーソル位置は変更しない
             }
         }
         self.cursor.clear_selection();
     }
 
-
     /// 指定された範囲のテキストを新しいテキストで置き換えます。
     /// （選択範囲のテキストを置き換える用途を想定）
-    pub fn replace_buffer_range(&mut self, start_byte_offset: usize, end_byte_offset: usize, new_text: &str) {
+    pub fn replace_buffer_range(
+        &mut self,
+        start_byte_offset: usize,
+        end_byte_offset: usize,
+        new_text: &str,
+    ) {
         if start_byte_offset <= end_byte_offset && end_byte_offset <= self.buffer.len() {
-            self.buffer.replace_range(start_byte_offset..end_byte_offset, new_text);
+            self.buffer
+                .replace_range(start_byte_offset..end_byte_offset, new_text);
             // 置き換え後のカーソル位置を調整
             let new_cursor_offset = start_byte_offset + new_text.len();
             self.set_cursor_from_byte_offset(new_cursor_offset);
@@ -290,7 +306,11 @@ impl Editor {
         for line in self.buffer.lines() {
             if current_y == self.cursor.y {
                 // 現在の行の先頭からのバイトオフセットを計算
-                offset += line.chars().take(self.cursor.x as usize).map(|c| c.len_utf8()).sum::<usize>();
+                offset += line
+                    .chars()
+                    .take(self.cursor.x as usize)
+                    .map(|c| c.len_utf8())
+                    .sum::<usize>();
                 break;
             }
             offset += line.len(); // 行のバイト長
@@ -313,7 +333,7 @@ impl Editor {
             if byte_offset >= current_offset && byte_offset <= current_offset + line_len_bytes {
                 // カーソルがこの行内にある
                 let relative_offset = byte_offset - current_offset;
-                
+
                 // Characters are iterated to find the x position
                 x_chars_count = 0;
                 let mut current_byte_in_line = 0;
@@ -326,7 +346,7 @@ impl Editor {
                     current_byte_in_line += char_len_bytes;
                     x_chars_count += 1;
                 }
-                
+
                 // Ensure x is not beyond the actual character count of the line
                 x_chars_count = x_chars_count.min(line.chars().count());
                 break;
