@@ -8,5 +8,5 @@ pub mod lang;
 pub fn bottom_bar<'a>() -> Paragraph<'a> {
     let fg = Color::Black;
     let bg = Color::White;
-    Paragraph::new(" Ctrl+Q: 終了 ").style(Style::default().fg(bg).bg(fg))
+    Paragraph::new(" Ctrl+W: 終了 ").style(Style::default().fg(bg).bg(fg))
 }
