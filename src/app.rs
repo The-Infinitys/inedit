@@ -22,10 +22,10 @@ impl Default for App {
 
 impl App {
     pub fn init() -> Self {
-        let app = Self::default();
+        
         // ここで第一引数からテキストを読み込むロジックを実装できます。
         // app.editor.set_buffer_from_file("path/to/file.txt"); // 例
-        app
+        Self::default()
     }
 }
 

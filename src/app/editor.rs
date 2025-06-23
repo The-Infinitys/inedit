@@ -3,19 +3,12 @@
 use super::cursor::Cursor; // appモジュール内のcursorモジュールからCursorをインポート
 
 /// テキストバッファとカーソルを管理し、編集操作を提供します。
+#[derive(Default)]
 pub struct Editor {
     pub buffer: String,
     pub cursor: Cursor,
 }
 
-impl Default for Editor {
-    fn default() -> Self {
-        Self {
-            buffer: String::new(),
-            cursor: Cursor::default(),
-        }
-    }
-}
 
 impl Editor {
     /// 新しいエディタを作成します。
