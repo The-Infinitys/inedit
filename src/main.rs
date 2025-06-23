@@ -5,7 +5,6 @@ use crossterm::{
 use ratatui::{
     backend::CrosstermBackend,
     Terminal,
-    layout::{Layout, Constraint, Direction},
 };
 use std::io;
 use inedit::{app::App, event_handler::handle_event, ui::draw_ui};
