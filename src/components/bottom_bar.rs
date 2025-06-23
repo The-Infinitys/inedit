@@ -2,7 +2,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::Paragraph,
 };
-
+pub mod lang;
 
 // BottomBarコンポーネント
 pub fn bottom_bar<'a>() -> Paragraph<'a> {

@@ -2,7 +2,7 @@ use ratatui::{
     style::{Color, Style},
     widgets::Paragraph,
 };
-
+pub mod about;
 // TopBarコンポーネント
 pub fn top_bar<'a>() -> Paragraph<'a> {
     let fg = Color::Black;

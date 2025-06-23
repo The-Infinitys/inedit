@@ -1,8 +1,8 @@
-use ratatui::prelude::*;
-use crate::components::{bottom_bar::bottom_bar, middle_box::middle_box, top_bar::top_bar};
 use crate::app::App;
+use crate::components::{bottom_bar::bottom_bar, middle_box::middle_box, top_bar::top_bar};
+use ratatui::prelude::*;
 
-pub fn ui<B: Backend>(f: &mut Frame<>, _app: &App) {
+pub fn ui<B: Backend>(f: &mut Frame, _app: &App) {
     let size = f.area();
 
     let chunks = Layout::default()
