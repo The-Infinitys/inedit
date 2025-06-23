@@ -1,8 +1,8 @@
-use ratatui::{
-    layout::{Layout, Constraint, Direction},
-    Frame,
-};
 use crate::{app::App, components::middle_block::render_middle_block};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, Layout},
+};
 
 pub fn draw_ui(f: &mut Frame, app: &App) {
     let size = f.area();
