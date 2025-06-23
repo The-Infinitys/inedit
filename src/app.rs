@@ -1,4 +1,12 @@
 pub struct App {
-    buffer: String,
+    pub buffer: String,
+}
+
+impl App {
+    pub fn new() -> Self {
+        Self {
+            buffer: String::from("Hello ratatui!"),
+        }
+    }
 }
 
