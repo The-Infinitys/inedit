@@ -9,7 +9,6 @@ pub struct Editor {
     pub cursor: Cursor,
 }
 
-
 impl Editor {
     /// 新しいエディタを作成します。
     pub fn new(initial_text: String) -> Self {
@@ -295,9 +294,8 @@ impl Editor {
     /// 現在のカーソル位置をバイトオフセットに変換します。
     fn get_cursor_byte_offset(&self) -> usize {
         let mut offset = 0;
-        let mut current_y = 0;
-        for line in self.buffer.lines() {
-            if current_y == self.cursor.y {
+        for (current_y, line) in self.buffer.lines().enumerate() {
+            if current_y == self.cursor.y as usize {
                 // 現在の行の先頭からのバイトオフセットを計算
                 offset += line
                     .chars()
@@ -308,7 +306,6 @@ impl Editor {
             }
             offset += line.len(); // 行のバイト長
             offset += 1; // 改行文字のバイト長 (LFを仮定)
-            current_y += 1;
         }
         offset
     }
