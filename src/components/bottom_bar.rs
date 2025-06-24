@@ -16,7 +16,7 @@ pub fn render_bottom_bar(f: &mut Frame, area: Rect, app: &App) {
     let cursor_info = format!("Ln {}, Col {}", app.editor.cursor.y + 1, app.editor.cursor.x + 1);
 
     let paragraph = Paragraph::new(Line::from(cursor_info).right_aligned())
-        .block(Block::default().borders(Borders::TOP)) // 上線で区切る
+        .block(Block::default().borders(Borders::NONE)) // 上線で区切る
         .style(Style::default().black().on_white()); // 黒文字、白背景
 
     f.render_widget(paragraph, area);

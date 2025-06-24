@@ -2,6 +2,10 @@
 
 use crate::app::App;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+// msg!とemsg!マクロをインポート（main.rsで#[macro_use] extern crate <your_crate_name>;があれば不要）
+// または、src/main.rsで `use crate::components::msg::{msg, emsg};` のように宣言する必要があります。
+// ここでは、マクロがどこか（例えばmain.rs）でグローバルに利用可能であると仮定します。
+use crate::{msg, emsg};
 
 /// イベントを処理し、アプリケーションの状態を更新します。
 /// 終了が要求された場合はtrueを返します。
@@ -17,43 +21,55 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
                 match key.code {
                     // アプリケーション終了コマンド
                     KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        msg!(app, "アプリケーションを終了します。");
                         return Ok(true); // Ctrl+Qで終了
                     }
                     KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                        msg!(app, "アプリケーションを終了します。");
                         return Ok(true); // Ctrl+Wで終了
                     }
                     KeyCode::Esc => {
+                        msg!(app, "アプリケーションを終了します。");
                         return Ok(true); // Escキーで終了
                     }
 
                     // 編集コマンド
                     KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+S で保存
-                        if let Err(e) = app.save_current_file() {
-                            eprintln!("ファイルの保存に失敗しました: {}", e);
+                        match app.save_current_file() {
+                            Ok(_) => msg!(app, "ファイルが正常に保存されました。"),
+                            Err(e) => emsg!(app, "ファイルの保存に失敗しました: {}", e),
                         }
                     }
                     KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+C でコピー
-                        if let Some(selected_text) = app.editor.copy_selection() {
-                            app.clipboard = Some(selected_text);
+                        if app.editor.copy_selection().is_some() {
+                             msg!(app, "選択範囲をクリップボードにコピーしました。");
+                        } else {
+                            msg!(app, "コピーする選択範囲がありません。");
                         }
                     }
                     KeyCode::Char('x') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+X で切り取り
-                        if let Some(cut_text) = app.editor.cut_selection() {
-                            app.clipboard = Some(cut_text);
+                        if app.editor.cut_selection().is_some() {
+                             msg!(app, "選択範囲をクリップボードに切り取りました。");
+                        } else {
+                            msg!(app, "切り取る選択範囲がありません。");
                         }
                     }
                     KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+V でペースト
                         if let Some(text_to_paste) = &app.clipboard {
                             app.editor.paste_text(text_to_paste);
+                            msg!(app, "クリップボードの内容をペーストしました。");
+                        } else {
+                            msg!(app, "クリップボードが空です。");
                         }
                     }
                     KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+A で全て選択
                         app.editor.select_all();
+                        msg!(app, "全選択しました。");
                     }
 
                     // テキスト挿入

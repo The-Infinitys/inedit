@@ -30,7 +30,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> io::Resu
     let mut app = App::init();
     loop {
         terminal.draw(|f| {
-            draw_ui(f, &app);
+            draw_ui(f, &mut app);
         })?;
 
         if handle_event(&mut app)? {

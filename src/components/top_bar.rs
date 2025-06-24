@@ -19,7 +19,7 @@ pub fn render_top_bar(f: &mut Frame, area: Rect, app: &App) {
     };
 
     let paragraph = Paragraph::new(Line::from(title).centered())
-        .block(Block::default().borders(Borders::BOTTOM)) // 下線で区切る
+        .block(Block::default().borders(Borders::NONE)) // 下線で区切る
         .style(Style::default().add_modifier(Modifier::BOLD)); // 太字にする
 
     f.render_widget(paragraph, area);

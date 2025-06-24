@@ -4,6 +4,7 @@ use super::cursor::Cursor;
 use std::fs;
 use std::io;
 use std::path::Path;
+use ratatui::layout::Rect; // Rect を使用するためにインポート
 
 /// テキストバッファとカーソルを管理し、編集操作を提供します。
 #[derive(Default)]
@@ -11,8 +12,10 @@ pub struct Editor {
     pub buffer: String,
     pub cursor: Cursor,
     pub search_query: String,
-    pub search_matches: Vec<(u16, u16)>, // 検索結果の(y, x)位置 (文字単位)
+    pub search_matches: Vec<(u16, u16)>,   // 検索結果の(y, x)位置 (文字単位)
     pub current_search_idx: Option<usize>, // 現在の検索結果のインデックス
+    pub scroll_offset_y: u16,              // 垂直方向のスクロールオフセット (行単位)
+    pub scroll_offset_x: u16,              // 水平方向のスクロールオフセット (文字単位)
 }
 
 impl Editor {
@@ -24,6 +27,8 @@ impl Editor {
             search_query: String::new(),
             search_matches: Vec::new(),
             current_search_idx: None,
+            scroll_offset_y: 0, // 初期スクロールオフセット
+            scroll_offset_x: 0, // 初期スクロールオフセット
         }
     }
 
@@ -34,6 +39,9 @@ impl Editor {
         self.buffer = content;
         // ファイルを読み込んだら、カーソルを先頭に設定し、選択をクリア
         self.set_cursor_position(0, 0, false);
+        // 新しいファイルの内容なのでスクロールオフセットもリセット
+        self.scroll_offset_y = 0;
+        self.scroll_offset_x = 0;
         Ok(())
     }
 
@@ -73,9 +81,51 @@ impl Editor {
         }
 
         // Cursorのupdate_positionメソッドを呼び出し、実際のカーソル位置を更新
-        self.cursor
-            .update_position(final_x, final_y, extend_selection);
+        self.cursor.update_position(final_x, final_y, extend_selection);
+
+        // カーソル位置の更新後、ビューポートのスクロールオフセットを調整
+        // ただし、このメソッドは描画領域のサイズを知らないため、調整は別途 `adjust_viewport_offset` で行う
     }
+
+    /// 描画領域のサイズに基づいてスクロールオフセットを調整し、カーソルが見えるようにします。
+    pub fn adjust_viewport_offset(&mut self, viewport_area: Rect) {
+        let cursor_y = self.cursor.y;
+        let cursor_x = self.cursor.x;
+        let viewport_height = viewport_area.height;
+        let viewport_width = viewport_area.width;
+
+        // 垂直スクロール (Y軸)
+        if cursor_y < self.scroll_offset_y {
+            // カーソルがビューポートの上端より上に移動した場合
+            self.scroll_offset_y = cursor_y;
+        } else if cursor_y >= self.scroll_offset_y + viewport_height {
+            // カーソルがビューポートの下端より下に移動した場合
+            self.scroll_offset_y = cursor_y - viewport_height + 1;
+        }
+
+        // 水平スクロール (X軸) - 行の長さも考慮
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        let current_line_len = if (cursor_y as usize) < lines.len() {
+            lines[cursor_y as usize].chars().count() as u16
+        } else {
+            0
+        };
+
+        if cursor_x < self.scroll_offset_x {
+            // カーソルがビューポートの左端より左に移動した場合
+            self.scroll_offset_x = cursor_x;
+        } else if cursor_x >= self.scroll_offset_x + viewport_width {
+            // カーソルがビューポートの右端より右に移動した場合
+            // 注: 右端にカーソルがある場合、その文字は見えるべきなので +1 は不要な場合があるが、
+            // ターミナルの表示幅によっては1文字分の余裕が欲しいこともあるため、ここでは簡潔に +1
+            self.scroll_offset_x = cursor_x - viewport_width + 1;
+        }
+
+        // スクロールオフセットがマイナスにならないように、またバッファの範囲を超えないように調整
+        self.scroll_offset_y = self.scroll_offset_y.min(lines.len().saturating_sub(1) as u16);
+        self.scroll_offset_x = self.scroll_offset_x.min(current_line_len); // 現在の行の長さを超えないように
+    }
+
 
     /// カーソルを次の行に移動します。
     pub fn next_line(&mut self, extend_selection: bool) {
@@ -102,12 +152,15 @@ impl Editor {
             if current_x < current_line_len {
                 // 現在の行内で次の文字へ
                 self.set_cursor_position(current_x.saturating_add(1), current_y, extend_selection);
-            } else {
+            } else if (current_y as usize + 1) < lines.len() { // 次の行が存在する場合
                 // 行末にいる場合は次の行の先頭へ
                 self.set_cursor_position(0, current_y.saturating_add(1), extend_selection);
+            } else {
+                // バッファの最後の行の末尾にいる場合は何もしない
+                self.set_cursor_position(current_x, current_y, extend_selection); // 現在の位置を再設定（実質何もしない）
             }
         } else {
-            // バッファが空または最後の行の末尾にいる場合は何もしない
+            // バッファが空または最後の行の末尾（カーソルがその行を超えている）にいる場合は何もしない
             self.set_cursor_position(current_x, current_y, extend_selection); // 現在の位置を再設定（実質何もしない）
         }
     }
@@ -134,22 +187,14 @@ impl Editor {
     /// カーソルを現在の行の先頭に移動します。
     pub fn move_cursor_to_line_start(&mut self, extend_selection: bool) {
         let current_y = self.cursor.y;
-        self.set_cursor_position(
-            self.cursor.get_potential_start_of_line_x(),
-            current_y,
-            extend_selection,
-        );
+        self.set_cursor_position(self.cursor.get_potential_start_of_line_x(), current_y, extend_selection);
     }
 
     /// カーソルを現在の行の末尾に移動します。
     pub fn move_cursor_to_line_end(&mut self, extend_selection: bool) {
         let current_y = self.cursor.y;
         // u16::MAX を渡して、set_cursor_position に行末を計算させる
-        self.set_cursor_position(
-            self.cursor.get_potential_end_of_line_x(),
-            current_y,
-            extend_selection,
-        );
+        self.set_cursor_position(self.cursor.get_potential_end_of_line_x(), current_y, extend_selection);
     }
 
     /// カーソルをドキュメントの先頭に移動します。
@@ -231,17 +276,13 @@ impl Editor {
             // バイトオフセットから新しいカーソル座標を計算
             let lines_before_cut: Vec<&str> = self.buffer[..start_byte_offset].lines().collect();
             let new_y = (lines_before_cut.len() as u16).saturating_sub(1); // 切り取り開始行
-            let new_x = if new_y == u16::MAX {
-                // バッファの先頭で切り取りの場合
+            let new_x = if new_y == u16::MAX { // バッファの先頭で切り取りの場合
                 0
             } else {
-                lines_before_cut
-                    .last()
-                    .map_or(0, |last_line| last_line.chars().count() as u16)
+                lines_before_cut.last().map_or(0, |last_line| last_line.chars().count() as u16)
             };
 
-            self.buffer
-                .replace_range(start_byte_offset..end_byte_offset, ""); // 選択範囲を削除
+            self.buffer.replace_range(start_byte_offset..end_byte_offset, ""); // 選択範囲を削除
 
             // カーソル位置を切り取った後の位置に設定し、選択を解除
             self.set_cursor_position(new_x, new_y, false);
@@ -293,7 +334,9 @@ impl Editor {
             // 文字の境界を考慮して、前の文字のバイト開始位置を特定
             let mut char_start_offset = current_offset;
             // マルチバイト文字の途中にカーソルがある場合は、文字の先頭まで戻る
-            while char_start_offset > 0 && !self.buffer.is_char_boundary(char_start_offset - 1) {
+            while char_start_offset > 0
+                && !self.buffer.is_char_boundary(char_start_offset - 1)
+            {
                 char_start_offset -= 1;
             }
             if char_start_offset > 0 {
@@ -332,8 +375,7 @@ impl Editor {
             if char_len_to_delete > 0 {
                 self.buffer.replace_range(
                     char_start_for_deletion..(char_start_for_deletion + char_len_to_delete),
-                    "",
-                );
+                    "");
                 // Deleteキーの場合、カーソル位置は変更しない（選択はクリア）
                 self.set_cursor_position(self.cursor.x, self.cursor.y, false);
             }
@@ -481,11 +523,7 @@ impl Editor {
         } else {
             // 逆方向検索 (カーソル位置から先頭まで)
             // 現在の行 (カーソル位置の1つ前から逆順に走査)
-            let start_x_for_backward_search = if current_x > 0 {
-                current_x.saturating_sub(1)
-            } else {
-                0
-            };
+            let start_x_for_backward_search = if current_x > 0 { current_x.saturating_sub(1) } else { 0 };
 
             for x_idx in (0..=start_x_for_backward_search).rev() {
                 let ch = current_line_chars[x_idx];
@@ -551,8 +589,7 @@ impl Editor {
         // 仮のキーワードリスト (Rust風)
         let keywords = vec![
             "fn", "let", "if", "else", "while", "for", "match", "loop", "struct", "enum", "use",
-            "mod", "pub", "mut", "return", "break", "continue", "impl", "trait", "where", "async",
-            "await", "unsafe",
+            "mod", "pub", "mut", "return", "break", "continue", "impl", "trait", "where", "async", "await", "unsafe",
         ];
 
         // 仮の識別子リスト (バッファ内の単語から取得)
@@ -637,7 +674,11 @@ impl Editor {
 
         // 現在位置より後に見つかった場合はその位置へ
         // 見つからなかった場合は、リストの先頭に戻る (ラップアラウンド)
-        let final_idx = if next_idx_found { closest_next_idx } else { 0 };
+        let final_idx = if next_idx_found {
+            closest_next_idx
+        } else {
+            0
+        };
 
         self.current_search_idx = Some(final_idx);
         let (y, x) = self.search_matches[final_idx];
