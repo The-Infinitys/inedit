@@ -8,7 +8,7 @@ use crate::{
         middle_block::left_block::render_left_block,
         middle_block::right_block::render_right_block,
         top_bar::render_top_bar,
-        popup::render_exit_popup, // 追加: ポップアップ描画関数
+        popup::{render_popup, PopupKind}, // ← 修正
     },
 };
 use ratatui::{
@@ -94,6 +94,23 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
 
     // 終了ポップアップが表示されている場合は描画
     if let Some(exit_popup_state) = &app.exit_popup_state {
-        render_exit_popup(f, size, exit_popup_state);
+        if exit_popup_state.input_mode {
+            render_popup(
+                f,
+                size,
+                PopupKind::Input {
+                    message: "保存先ファイル名を入力してください",
+                    input: &exit_popup_state.input_text,
+                },
+                exit_popup_state,
+            );
+        } else {
+            render_popup(
+                f,
+                size,
+                PopupKind::Exit,
+                exit_popup_state,
+            );
+        }
     }
 }

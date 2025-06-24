@@ -1,8 +1,9 @@
 use crossterm::{
+    event::{self, Event as CEvent},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use inedit::app::{App, AppControlFlow, MessageType}; // AppControlFlowをインポート
+use inedit::app::{App, AppControlFlow, MessageType};
 use inedit::event_handler;
 use inedit::ui;
 use ratatui::{Terminal, backend::CrosstermBackend};
@@ -16,7 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut terminal = Terminal::new(backend)?;
 
     let mut app = App::init();
-    let tick_rate = Duration::from_millis(250); // UI更新レート
+    let tick_rate = Duration::from_millis(250);
 
     let res = run_app(&mut terminal, &mut app, tick_rate);
 
@@ -34,44 +35,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
-    _tick_rate: Duration, // tick_rateは現在event_handler内で直接使用されない
+    _tick_rate: Duration,
 ) -> io::Result<()> {
-    // let mut last_tick = std::time::Instant::now(); // 不要になったので削除
-
     loop {
-        // UIを描画
         terminal.draw(|f| ui::draw_ui(f, app))?;
 
-        // イベントハンドラを呼び出し、アプリケーションの次の制御フローを取得
-        let control_flow = event_handler::handle_event(app)?; // event_handlerから結果を取得
-
-        match control_flow {
-            AppControlFlow::Exit => {
-                // アプリケーションを終了
-                return Ok(());
-            }
-            AppControlFlow::TriggerSaveAndExit => {
-                // 保存して終了
-                match app.save_current_file() {
-                    Ok(_) => return Ok(()), // 保存成功後、アプリ終了
-                    Err(e) => {
-                        app.add_message(MessageType::Error, format!("保存エラー: {}", e));
-                        // エラーが発生してもアプリはすぐに終了せず、エラーメッセージを表示して続行する
-                        // ユーザーが再度終了を試みるか、エラーを修正できるようにする
+        // --- ここを修正 ---
+        // キーイベントを取得してhandle_eventに渡す
+        if event::poll(Duration::from_millis(100))? {
+            if let CEvent::Key(key_event) = event::read()? {
+                let control_flow = event_handler::handle_event(app, &key_event)?;
+                match control_flow {
+                    AppControlFlow::Exit => {
+                        return Ok(());
+                    }
+                    AppControlFlow::TriggerSaveAndExit => match app.save_current_file() {
+                        Ok(_) => return Ok(()),
+                        Err(e) => {
+                            app.add_message(MessageType::Error, format!("保存エラー: {}", e));
+                        }
+                    },
+                    AppControlFlow::TriggerDiscardAndExit => {
+                        return Ok(());
+                    }
+                    AppControlFlow::Continue => {
+                        // 何もしない
+                    }
+                    AppControlFlow::ShowExitPopup => {
+                        // ポップアップ表示中はループ継続
                     }
                 }
-            }
-            AppControlFlow::TriggerDiscardAndExit => {
-                // 変更を破棄して終了
-                return Ok(());
-            }
-            AppControlFlow::Continue => {
-                // アプリケーションを通常通り続行
-                // 特に何もしない
-            }
-            AppControlFlow::ShowExitPopup => {
-                // 終了ポップアップが表示されている状態なので、メインループは続行
-                // UIは `app.exit_popup_state` に応じてポップアップを描画する
             }
         }
     }
