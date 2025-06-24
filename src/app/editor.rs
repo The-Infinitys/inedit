@@ -1,5 +1,6 @@
 // src/app/editor.rs
-
+pub mod search;
+pub mod suggest;
 use super::cursor::Cursor;
 use arboard::Clipboard; // すでにインポート済み
 use ratatui::layout::Rect;
@@ -859,5 +860,31 @@ impl Editor {
             self.undo_stack.push(self.buffer.clone());
             self.buffer = next;
         }
+    }
+
+    /// 折返しモード用: ビューポート高さに合わせた画面上の行リストを返す
+    /// 戻り値は (バッファ行番号, 折返しインデックス, 画面行文字列)
+    pub fn get_visual_lines(&self) -> Vec<(usize, usize, String)> {
+        let mut result = Vec::new();
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        // 仮: 1画面行=40文字で折返し（本来はエディタ幅を引数で受けるべき）
+        let wrap_width = 40;
+        for (buf_idx, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                result.push((buf_idx, 0, String::new()));
+                continue;
+            }
+            let mut start = 0;
+            let mut wrap_idx = 0;
+            let chars: Vec<char> = line.chars().collect();
+            while start < chars.len() {
+                let end = (start + wrap_width).min(chars.len());
+                let visual = chars[start..end].iter().collect::<String>();
+                result.push((buf_idx, wrap_idx, visual));
+                start = end;
+                wrap_idx += 1;
+            }
+        }
+        result
     }
 }

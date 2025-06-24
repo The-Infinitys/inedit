@@ -39,6 +39,13 @@ pub enum AppControlFlow {
     ShowExitPopup,         // 終了ポップアップを表示し、ユーザーの入力を待つ
 }
 
+pub enum InputOverlay {
+    None,
+    Search { query: String, cursor: usize },
+    Replace { query: String, replace: String, cursor: usize, focus_replace: bool },
+    Suggest { prefix: String, suggestions: Vec<String>, selected: usize },
+}
+
 /// アプリケーション全体の状態を管理します。
 pub struct App {
     pub editor: Editor,
@@ -53,6 +60,7 @@ pub struct App {
     pub highlighter: Highlighter,
     pub current_syntax_name: String,
     pub config: Config, // 追加: アプリケーションの設定
+    pub input_overlay: InputOverlay,
 }
 
 impl Default for App {
@@ -76,6 +84,7 @@ impl Default for App {
             highlighter, // 初期化済みHighlighterを使用
             current_syntax_name: "Plain Text".to_string(),
             config, // 初期化済みconfigを使用
+            input_overlay: InputOverlay::None,
         }
     }
 }

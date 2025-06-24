@@ -3,3 +3,5 @@ pub mod message_display;
 pub mod middle_block;
 pub mod popup;
 pub mod top_bar;
+pub mod search;
+pub mod suggest;
