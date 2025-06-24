@@ -8,9 +8,10 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::time::{Duration, Instant}; // DurationとInstantをインポート
+use std::time::{Duration, Instant};
 use crate::{emsg, msg};
-pub use crate::components::popup::{ExitPopupState, ExitPopupResult, ExitPopupOption}; // pub追加
+pub use crate::components::popup::{ExitPopupState, ExitPopupResult, ExitPopupOption};
+pub use crate::app::features::syntax::Highlighter; // Highlighterをpubにする
 
 /// UIに表示されるメッセージの種類を定義します。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,34 +24,33 @@ pub enum MessageType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LineStatus {
     Unchanged,
-    Modified, // 変更された行
-    Added,    // 新しく追加された行
-              // Deletedは現在のバッファに行が存在しないため、このVecでは直接表現しません。
-              // 左ブロックや右ブロックで、original_bufferと比較して空白または特殊記号で表現することを検討します。
+    Modified,
+    Added,
 }
 
 /// アプリケーションのイベント処理結果を定義します。
-/// これにより、メインループはイベントハンドラからの指示に基づいて動作を決定します。
 #[derive(Debug, PartialEq, Eq)]
 pub enum AppControlFlow {
-    Continue,        // アプリケーションを通常通り続行
-    Exit,            // アプリケーションを終了
-    TriggerSaveAndExit, // 保存操作を行い、その後終了
-    TriggerDiscardAndExit, // 変更を破棄し、その後終了
-    ShowExitPopup,   // 終了ポップアップを表示し、ユーザーの入力を待つ
+    Continue,
+    Exit,
+    TriggerSaveAndExit,
+    TriggerDiscardAndExit,
+    ShowExitPopup,
 }
 
 /// アプリケーション全体の状態を管理します。
 pub struct App {
     pub editor: Editor,
-    pub target_path: Option<PathBuf>, // 編集対象の元のファイルのパス
-    pub temp_path: Option<PathBuf>,   // 編集中の内容を保存する一時ファイルのパス
-    pub clipboard: Option<String>,    // アプリケーション内のクリップボードデータ
-    pub messages: Vec<(MessageType, String, Instant)>, // UIに表示するメッセージのキュー (種類, 内容, タイムスタンプ)
-    pub original_buffer: String, // ファイル読み込み時のオリジナルコンテンツ（差分計算用）
-    pub word_wrap_enabled: bool, // 折り返し表示モードのON/OFF
-    pub line_statuses: Vec<LineStatus>, // 各行の差分状態
-    pub exit_popup_state: Option<ExitPopupState>, // 追加: 終了ポップアップの状態
+    pub target_path: Option<PathBuf>,
+    pub temp_path: Option<PathBuf>,
+    pub clipboard: Option<String>,
+    pub messages: Vec<(MessageType, String, Instant)>,
+    pub original_buffer: String,
+    pub word_wrap_enabled: bool,
+    pub line_statuses: Vec<LineStatus>,
+    pub exit_popup_state: Option<ExitPopupState>,
+    pub highlighter: Highlighter, // 追加: シンタックスハイライター
+    pub current_syntax_name: String, // 追加: 現在の言語シンタックス名
 }
 
 impl Default for App {
@@ -61,10 +61,12 @@ impl Default for App {
             temp_path: None,
             clipboard: None,
             messages: Vec::new(),
-            original_buffer: String::new(), // 初期化
-            word_wrap_enabled: true,        // デフォルトで折り返し表示を有効
-            line_statuses: Vec::new(),      // 初期化
-            exit_popup_state: None, // 初期状態ではポップアップは非表示
+            original_buffer: String::new(),
+            word_wrap_enabled: true,
+            line_statuses: Vec::new(),
+            exit_popup_state: None,
+            highlighter: Highlighter::new(), // 初期化
+            current_syntax_name: "Plain Text".to_string(), // デフォルト
         }
     }
 }
@@ -130,9 +132,7 @@ impl App {
                             "一時ファイル {:?} から正常に読み込みました。",
                             temp_path
                         );
-                        app.original_buffer = app.editor.buffer.clone(); // original_bufferも設定
-                        app.calculate_diff_status();
-                        return app;
+                        app.original_buffer = app.editor.buffer.clone();
                     }
                     Err(e) => {
                         emsg!(
@@ -141,66 +141,109 @@ impl App {
                             temp_path,
                             e
                         );
-                    }
-                }
-            }
-
-            // 一時ファイルが存在しないか読み込みに失敗した場合、元のファイルを試す
-            if original_path.exists() {
-                match app.editor.load_from_file(&original_path) {
-                    Ok(_) => {
-                        msg!(
-                            app,
-                            "元のファイル {:?} を正常に読み込みました。",
-                            original_path
-                        );
-                        app.original_buffer = app.editor.buffer.clone(); // original_bufferも設定
-                        // 元のファイルを読み込んだら、その内容をすぐに一時ファイルに書き込む
-                        if let Err(e) = app.editor.save_to_file(&temp_path) {
-                            emsg!(
-                                app,
-                                "警告: 初期コンテンツを一時ファイル {:?} に書き込めませんでした: {}",
-                                temp_path,
-                                e
-                            );
+                        if original_path.exists() {
+                            match app.editor.load_from_file(&original_path) {
+                                Ok(_) => {
+                                    msg!(
+                                        app,
+                                        "元のファイル {:?} を正常に読み込みました。",
+                                        original_path
+                                    );
+                                    app.original_buffer = app.editor.buffer.clone();
+                                    if let Err(e) = app.editor.save_to_file(&temp_path) {
+                                        emsg!(
+                                            app,
+                                            "警告: 初期コンテンツを一時ファイル {:?} に書き込めませんでした: {}",
+                                            temp_path,
+                                            e
+                                        );
+                                    }
+                                }
+                                Err(e) => {
+                                    emsg!(
+                                        app,
+                                        "元のファイル {:?} の読み込み中にエラーが発生しました: {}。空のバッファで開始します。",
+                                        original_path,
+                                        e
+                                    );
+                                    if let Err(e) = fs::write(&temp_path, "") {
+                                        emsg!(
+                                            app,
+                                            "警告: 空の一時ファイル {:?} を作成できませんでした: {}",
+                                            temp_path,
+                                            e
+                                        );
+                                    }
+                                }
+                            }
                         } else {
                             msg!(
                                 app,
-                                "初期コンテンツを一時ファイル {:?} に書き込みました。",
-                                temp_path
+                                "元のファイルが存在しません: {:?}。新しいファイルバッファと一時ファイルを作成します。",
+                                file_path_str
                             );
-                        }
-                    }
-                    Err(e) => {
-                        emsg!(
-                            app,
-                            "元のファイル {:?} の読み込み中にエラーが発生しました: {}。空のバッファで開始します。",
-                            original_path,
-                            e
-                        );
-                        if let Err(e) = fs::write(&temp_path, "") {
-                            emsg!(
-                                app,
-                                "警告: 空の一時ファイル {:?} を作成できませんでした: {}",
-                                temp_path,
-                                e
-                            );
+                            if let Err(e) = fs::write(&temp_path, "") {
+                                emsg!(
+                                    app,
+                                    "警告: 空の一時ファイル {:?} を作成できませんでした: {}",
+                                    temp_path,
+                                    e
+                                );
+                            }
                         }
                     }
                 }
             } else {
-                msg!(
-                    app,
-                    "元のファイルが存在しません: {:?}。新しいファイルバッファと一時ファイルを作成します。",
-                    file_path_str
-                );
-                if let Err(e) = fs::write(&temp_path, "") {
-                    emsg!(
+                // 一時ファイルが存在しない場合、元のファイルを試す
+                if original_path.exists() {
+                    match app.editor.load_from_file(&original_path) {
+                        Ok(_) => {
+                            msg!(
+                                app,
+                                "元のファイル {:?} を正常に読み込みました。",
+                                original_path
+                            );
+                            app.original_buffer = app.editor.buffer.clone();
+                            if let Err(e) = app.editor.save_to_file(&temp_path) {
+                                emsg!(
+                                    app,
+                                    "警告: 初期コンテンツを一時ファイル {:?} に書き込めませんでした: {}",
+                                    temp_path,
+                                    e
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            emsg!(
+                                app,
+                                "元のファイル {:?} の読み込み中にエラーが発生しました: {}。空のバッファで開始します。",
+                                original_path,
+                                e
+                            );
+                            if let Err(e) = fs::write(&temp_path, "") {
+                                emsg!(
+                                    app,
+                                    "警告: 空の一時ファイル {:?} を作成できませんでした: {}",
+                                    temp_path,
+                                    e
+                                );
+                            }
+                        }
+                    }
+                } else {
+                    msg!(
                         app,
-                        "警告: 空の一時ファイル {:?} を作成できませんでした: {}",
-                        temp_path,
-                        e
+                        "元のファイルが存在しません: {:?}。新しいファイルバッファと一時ファイルを作成します。",
+                        file_path_str
                     );
+                    if let Err(e) = fs::write(&temp_path, "") {
+                        emsg!(
+                            app,
+                            "警告: 空の一時ファイル {:?} を作成できませんでした: {}",
+                            temp_path,
+                            e
+                        );
+                    }
                 }
             }
         } else {
@@ -209,7 +252,14 @@ impl App {
                 "ファイルパスが指定されていません。空のバッファ（プレーンテキストモード）で開始します。一時ファイルは作成されません。"
             );
         }
-        app.calculate_diff_status(); // 初期化時に差分状態を計算
+        
+        // ファイル内容とパスに基づいてシンタックスを決定
+        let first_lines: String = app.editor.buffer.lines().take(5).collect::<Vec<&str>>().join("\n");
+        let syntax = app.highlighter.get_syntax_for_file(app.target_path.as_deref(), &first_lines);
+        app.current_syntax_name = syntax.name.clone();
+        msg!(app, "言語: {}", app.current_syntax_name);
+
+        app.calculate_diff_status();
         app
     }
 
@@ -218,8 +268,8 @@ impl App {
         if let Some(original_path) = &self.target_path {
             self.editor.save_to_file(original_path)?;
             msg!(self, "ファイルは {:?} に保存されました。", original_path);
-            self.original_buffer = self.editor.buffer.clone(); // 保存後、オリジナルバッファを更新
-            self.calculate_diff_status(); // 差分状態を再計算
+            self.original_buffer = self.editor.buffer.clone();
+            self.calculate_diff_status();
 
             if let Some(temp_path) = &self.temp_path {
                 if temp_path.exists() {
@@ -257,7 +307,6 @@ impl App {
     }
 
     /// 現在のバッファとオリジナルバッファを比較し、各行の差分状態を計算します。
-    /// （簡易的な行ごとの比較で、行の挿入・削除によるズレは考慮しません。）
     pub fn calculate_diff_status(&mut self) {
         self.line_statuses.clear();
         let original_lines: Vec<&str> = self.original_buffer.lines().collect();
@@ -274,9 +323,6 @@ impl App {
                 self.line_statuses.push(LineStatus::Added);
             }
         }
-        // ここでは、original_linesに存在しcurrent_linesに存在しない行（削除された行）は
-        // line_statusesの長さには影響しません。UI側でoriginal_bufferの行数と比較して、
-        // 削除された行のギャップを表現することを検討できますが、今回は簡易的なアプローチです。
     }
 
     pub fn get_visible_message_count(&self) -> u16 {
@@ -294,15 +340,13 @@ impl App {
     }
 
     /// 終了を試みます。未保存の変更がある場合はポップアップを表示する状態に設定します。
-    /// イベントハンドラがこの設定を読み取り、適切な AppControlFlow を返します。
     pub fn trigger_exit_popup_if_needed(&mut self) {
         if self.has_unsaved_changes() {
-            self.exit_popup_state = Some(ExitPopupState::default()); // ポップアップを表示する状態に設定
+            self.exit_popup_state = Some(ExitPopupState::default());
         }
     }
 
     /// 終了ポップアップのキーイベントを処理します。
-    /// ポップアップが表示されている場合にのみ呼び出されます。
     pub fn handle_exit_popup_key(&mut self, key_event: &crossterm::event::KeyEvent) -> ExitPopupResult {
         if let Some(state) = &mut self.exit_popup_state {
             match key_event.code {
@@ -320,7 +364,7 @@ impl App {
                         ExitPopupOption::DiscardAndExit => ExitPopupResult::DiscardAndExit,
                         ExitPopupOption::Cancel => ExitPopupResult::Cancel,
                     };
-                    self.exit_popup_state = None; // ポップアップを非表示にする
+                    self.exit_popup_state = None;
                     result
                 }
                 crossterm::event::KeyCode::Char('s') | crossterm::event::KeyCode::Char('S') => {
@@ -339,7 +383,6 @@ impl App {
                 _ => ExitPopupResult::None,
             }
         } else {
-            // ここには到達しないはずだが、念のためNoneを返す
             ExitPopupResult::None
         }
     }
