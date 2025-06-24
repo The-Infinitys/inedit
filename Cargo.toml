@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.98"
+arboard = {version="3.5.0",features=["wayland-data-control" ,"wl-clipboard-rs"]}
 colored = "3.0.0"
 crossterm = "0.29.0"
 directories = "6.0.0"

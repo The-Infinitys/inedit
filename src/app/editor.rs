@@ -1,6 +1,7 @@
 // src/app/editor.rs
 
 use super::cursor::Cursor;
+use arboard::Clipboard;
 use ratatui::layout::Rect;
 use std::fs;
 use std::io;
@@ -18,6 +19,8 @@ pub struct Editor {
     pub current_search_idx: Option<usize>, // 現在の検索結果のインデックス
     pub scroll_offset_y: u16,            // 垂直方向のスクロールオフセット (行単位)
     pub scroll_offset_x: u16,            // 水平方向のスクロールオフセット (文字単位)
+    undo_stack: Vec<String>,
+    redo_stack: Vec<String>,
 }
 
 impl Editor {
@@ -31,6 +34,8 @@ impl Editor {
             current_search_idx: None,
             scroll_offset_y: 0, // 初期スクロールオフセット
             scroll_offset_x: 0, // 初期スクロールオフセット
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         }
     }
 
@@ -365,6 +370,7 @@ impl Editor {
 
     /// カーソル位置に文字を挿入します。
     pub fn insert_char(&mut self, c: char) {
+        self.push_undo();
         if self.cursor.is_selecting() {
             self.cut_selection(); // 選択範囲がある場合はまず切り取る
         }
@@ -777,5 +783,53 @@ impl Editor {
         self.current_search_idx = Some(final_idx);
         let (y, x) = self.search_matches[final_idx];
         self.set_cursor_position(x, y, false); // 検索結果に移動（選択はクリア）
+    }
+
+    pub fn copy_selection_to_clipboard(&self) {
+        if let Some((start, end)) = self.get_selection_range() {
+            let text = &self.buffer[start..end];
+            let mut clipboard = Clipboard::new().ok();
+            if let Some(ref mut cb) = clipboard {
+                let _ = cb.set_text(text.to_string());
+            }
+        }
+    }
+
+    pub fn paste_from_clipboard(&mut self) {
+        let mut clipboard = Clipboard::new().ok();
+        if let Some(ref mut cb) = clipboard {
+            if let Ok(text) = cb.get_text() {
+                self.push_undo();
+                // 選択範囲があれば切り取る
+                if self.cursor.is_selecting() {
+                    self.cut_selection();
+                }
+                let current_offset = self.get_cursor_byte_offset();
+                self.buffer.insert_str(current_offset, &text);
+                let new_cursor_offset = current_offset + text.len();
+                self.set_cursor_from_byte_offset(new_cursor_offset, false);
+            }
+        }
+    }
+
+    /// 編集操作の前に呼び出して履歴を積む
+    fn push_undo(&mut self) {
+        self.undo_stack.push(self.buffer.clone());
+        self.redo_stack.clear();
+    }
+
+    pub fn undo(&mut self) {
+        if let Some(prev) = self.undo_stack.pop() {
+            self.redo_stack.push(self.buffer.clone());
+            self.buffer = prev;
+            // カーソル位置も復元したい場合は別途保存が必要
+        }
+    }
+
+    pub fn redo(&mut self) {
+        if let Some(next) = self.redo_stack.pop() {
+            self.undo_stack.push(self.buffer.clone());
+            self.buffer = next;
+        }
     }
 }

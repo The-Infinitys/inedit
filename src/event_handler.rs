@@ -132,6 +132,44 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
                 Err(e) => emsg!(app, "ファイルの保存に失敗しました: {}", e),
             }
         }
+        // Undo/Redo/テーマ切り替え/クリップボード連携を追加
+        else if bindings.undo.matches(key) {
+            app.editor.undo();
+            app.calculate_diff_status();
+            msg!(app, "元に戻しました。");
+        } else if bindings.redo.matches(key) {
+            app.editor.redo();
+            app.calculate_diff_status();
+            msg!(app, "やり直しました。");
+        }  else if bindings.copy.matches(key) {
+            if let Some(text) = app.editor.copy_selection() {
+                // OSクリップボードにもコピー
+                if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                    let _ = clipboard.set_text(text.clone());
+                }
+                app.clipboard = Some(text);
+                msg!(app, "選択範囲をクリップボードにコピーしました。");
+            } else {
+                msg!(app, "コピーする選択範囲がありません。");
+            }
+        } else if bindings.paste.matches(key) {
+            // まずOSクリップボードから取得
+            let mut pasted = None;
+            if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                if let Ok(text) = clipboard.get_text() {
+                    pasted = Some(text);
+                }
+            }
+            // OSクリップボードが空ならアプリ内クリップボード
+            let text_to_paste = pasted.or_else(|| app.clipboard.clone());
+            if let Some(text) = text_to_paste {
+                app.editor.paste_text(&text);
+                app.calculate_diff_status();
+                msg!(app, "クリップボードの内容をペーストしました。");
+            } else {
+                msg!(app, "クリップボードが空です。");
+            }
+        }
         // コピー
         else if bindings.copy.matches(key) {
             if app.editor.copy_selection().is_some() {

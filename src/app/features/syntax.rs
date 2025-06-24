@@ -6,7 +6,7 @@ use syntect::{
     highlighting::{Color as SyntectColor, FontStyle, Style as SyntectStyle, Theme, ThemeSet},
     parsing::{SyntaxReference, SyntaxSet},
 };
-
+pub mod themes;
 /// シンタックスハイライト処理に必要なデータを保持します。
 pub struct Highlighter {
     pub syntax_set: SyntaxSet,
@@ -26,7 +26,9 @@ impl Default for Highlighter {
         for (name, theme) in theme_set.themes.iter() {
             themes.insert(name.clone(), theme.clone());
         }
-
+        for (name, theme) in themes::themes() {
+            themes.insert(name, theme);
+        }
         Highlighter {
             syntax_set,
             theme_set,
