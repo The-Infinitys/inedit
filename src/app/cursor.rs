@@ -32,10 +32,9 @@ impl Cursor {
             // 選択を拡張しない場合、現在の選択をクリア
             self.clear_selection();
         } else if self.selection_start.is_none() {
-            // 選択モードでまだ選択が開始されていない場合、新しいカーソル位置を選択開始点とする
-            // ここが以前のバグの箇所で、`self.x, self.y` (古いカーソル位置) ではなく、
-            // `new_x, new_y` (新しいカーソル位置) を設定するように修正しました。
-            self.selection_start = Some((new_x, new_y));
+            // 選択モードでまだ選択が開始されていない場合、現在の（移動前の）カーソル位置を選択開始点とする
+            // 修正箇所: ここで new_x, new_y ではなく self.x, self.y を使用します。
+            self.selection_start = Some((self.x, self.y));
         }
         self.x = new_x;
         self.y = new_y;
