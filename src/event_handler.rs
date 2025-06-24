@@ -1,8 +1,8 @@
 // src/event_handler.rs
 
 use crate::app::App;
+use crate::{emsg, msg};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use crate::{msg, emsg};
 
 /// イベントを処理し、アプリケーションの状態を更新します。
 /// 終了が要求された場合はtrueを返します。
@@ -41,7 +41,7 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
                     KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+C でコピー
                         if app.editor.copy_selection().is_some() {
-                             msg!(app, "選択範囲をクリップボードにコピーしました。");
+                            msg!(app, "選択範囲をクリップボードにコピーしました。");
                         } else {
                             msg!(app, "コピーする選択範囲がありません。");
                         }
@@ -50,7 +50,7 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
                         // Ctrl+X で切り取り
                         if let Some(cut_text) = app.editor.cut_selection() {
                             app.clipboard = Some(cut_text);
-                             msg!(app, "選択範囲をクリップボードに切り取りました。");
+                            msg!(app, "選択範囲をクリップボードに切り取りました。");
                         } else {
                             msg!(app, "切り取る選択範囲がありません。");
                         }

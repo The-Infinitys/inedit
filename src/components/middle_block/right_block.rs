@@ -1,12 +1,11 @@
-
+use crate::app::{App, LineStatus};
 use ratatui::{
     Frame,
-    layout::{Rect, Alignment},
+    layout::{Alignment, Rect},
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-};
-use crate::app::{App, LineStatus}; // AppとLineStatus構造体を使用するためにインポート
+}; // AppとLineStatus構造体を使用するためにインポート
 
 /// Right Block を描画します。スクロールバーと差分マーカーを表示します。
 pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
@@ -26,12 +25,12 @@ pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
 
     // つまみの上端位置
     let thumb_start_y = if editor_lines_count > 0 {
-        ((app.editor.scroll_offset_y as f32 / editor_lines_count as f32) * viewport_height as f32) as u16
+        ((app.editor.scroll_offset_y as f32 / editor_lines_count as f32) * viewport_height as f32)
+            as u16
     } else {
         0
     };
     let thumb_start_y = thumb_start_y.min(viewport_height.saturating_sub(thumb_height));
-
 
     for y_on_screen in 0..viewport_height {
         let mut spans: Vec<Span> = Vec::new();
@@ -46,33 +45,34 @@ pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
 
         // 差分マーカーの描画
         let corresponding_editor_line_idx = (app.editor.scroll_offset_y + y_on_screen) as usize;
-        let diff_marker = if let Some(&status) = app.line_statuses.get(corresponding_editor_line_idx) {
-            match status {
-                LineStatus::Modified => Style::default().fg(Color::Yellow),
-                LineStatus::Added => Style::default().fg(Color::Green),
-                LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
-            }
-        } else {
-            Style::default().fg(Color::DarkGray) // 該当する行がない場合
-        };
+        let diff_marker =
+            if let Some(&status) = app.line_statuses.get(corresponding_editor_line_idx) {
+                match status {
+                    LineStatus::Modified => Style::default().fg(Color::Yellow),
+                    LineStatus::Added => Style::default().fg(Color::Green),
+                    LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
+                }
+            } else {
+                Style::default().fg(Color::DarkGray) // 該当する行がない場合
+            };
 
         // マーカーの文字 (' ', '~', '+')
-        let marker_char = if let Some(&status) = app.line_statuses.get(corresponding_editor_line_idx) {
-            match status {
-                LineStatus::Modified => '~',
-                LineStatus::Added => '+',
-                LineStatus::Unchanged => ' ',
-            }
-        } else {
-            ' ' // 該当する行がない場合
-        };
+        let marker_char =
+            if let Some(&status) = app.line_statuses.get(corresponding_editor_line_idx) {
+                match status {
+                    LineStatus::Modified => '~',
+                    LineStatus::Added => '+',
+                    LineStatus::Unchanged => ' ',
+                }
+            } else {
+                ' ' // 該当する行がない場合
+            };
 
         spans.push(Span::raw(line_content)); // スクロールバー部分
         spans.push(Span::styled(marker_char.to_string(), diff_marker)); // 差分マーカー
 
         scrollbar_content.push(Line::from(spans));
     }
-
 
     let block = Block::default()
         .borders(Borders::LEFT) // 左側に境界線

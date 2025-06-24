@@ -1,12 +1,11 @@
-
+use crate::app::{App, LineStatus};
 use ratatui::{
     Frame,
-    layout::{Rect, Alignment},
+    layout::{Alignment, Rect},
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
-};
-use crate::app::{App, LineStatus}; // AppとLineStatus構造体を使用するためにインポート
+}; // AppとLineStatus構造体を使用するためにインポート
 
 /// Left Block を描画します。行番号と差分を表示します。
 pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
@@ -20,11 +19,19 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
     for i in start_line_idx..end_line_idx {
         if i < editor_lines.len() {
             let line_number = (i + 1).to_string(); // 1-indexed
-            let line_status = app.line_statuses.get(i).copied().unwrap_or(LineStatus::Unchanged);
+            let line_status = app
+                .line_statuses
+                .get(i)
+                .copied()
+                .unwrap_or(LineStatus::Unchanged);
 
             let diff_symbol_style = match line_status {
-                LineStatus::Modified => Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD),
-                LineStatus::Added => Style::default().fg(Color::Green).add_modifier(ratatui::style::Modifier::BOLD),
+                LineStatus::Modified => Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+                LineStatus::Added => Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
                 LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
             };
             let diff_symbol = match line_status {
@@ -47,7 +54,10 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
             lines_to_display.push(Line::from(vec![line_num_span, diff_span]));
         } else {
             // バッファの行数を超える場合は空行
-            lines_to_display.push(Line::from(vec![Span::styled("      ", Style::default().fg(Color::DarkGray))])); // 6スペース + 1スペース
+            lines_to_display.push(Line::from(vec![Span::styled(
+                "      ",
+                Style::default().fg(Color::DarkGray),
+            )])); // 6スペース + 1スペース
         }
     }
 

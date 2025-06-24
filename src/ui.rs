@@ -3,12 +3,12 @@ use crate::{
     app::App,
     components::{
         bottom_bar::render_bottom_bar,
+        message_display::render_message_display,
+        middle_block::editor_block::render_editor_block, // 新規
+        middle_block::left_block::render_left_block,     // 新規
+        middle_block::right_block::render_right_block,   // 新規
         // middle_block を削除
         top_bar::render_top_bar,
-        message_display::render_message_display,
-        middle_block::left_block::render_left_block,    // 新規
-        middle_block::editor_block::render_editor_block, // 新規
-        middle_block::right_block::render_right_block,   // 新規
     },
 };
 use ratatui::{
@@ -25,9 +25,9 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Length(1),    // Top Bar (タイトル)
-                Constraint::Min(0),       // メインエディタ領域（Left + Editor + Right）
-                Constraint::Length(1),    // Bottom Bar (カーソル位置)
+                Constraint::Length(1), // Top Bar (タイトル)
+                Constraint::Min(0),    // メインエディタ領域（Left + Editor + Right）
+                Constraint::Length(1), // Bottom Bar (カーソル位置)
             ]
             .as_ref(),
         )
@@ -44,9 +44,9 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
         .direction(Direction::Horizontal)
         .constraints(
             [
-                Constraint::Length(7),   // Left Block (行番号と差分シンボル、例: " 999 + ")
-                Constraint::Min(0),      // Editor Block (エディタ本体)
-                Constraint::Length(3),   // Right Block (スクロールバーと差分マーカー)
+                Constraint::Length(7), // Left Block (行番号と差分シンボル、例: " 999 + ")
+                Constraint::Min(0),    // Editor Block (エディタ本体)
+                Constraint::Length(3), // Right Block (スクロールバーと差分マーカー)
             ]
             .as_ref(),
         )
@@ -74,8 +74,14 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     const MESSAGE_MARGIN: u16 = 1; // 画面端からのマージン
 
     let msg_area = Rect {
-        x: size.width.saturating_sub(MESSAGE_WIDTH).saturating_sub(MESSAGE_MARGIN),
-        y: size.height.saturating_sub(MESSAGE_HEIGHT).saturating_sub(MESSAGE_MARGIN),
+        x: size
+            .width
+            .saturating_sub(MESSAGE_WIDTH)
+            .saturating_sub(MESSAGE_MARGIN),
+        y: size
+            .height
+            .saturating_sub(MESSAGE_HEIGHT)
+            .saturating_sub(MESSAGE_MARGIN),
         width: MESSAGE_WIDTH,
         height: MESSAGE_HEIGHT,
     };

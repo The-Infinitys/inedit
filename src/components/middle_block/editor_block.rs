@@ -1,12 +1,11 @@
-
+use crate::app::App;
 use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
-};
-use crate::app::App; // App構造体を使用するためにインポート
+}; // App構造体を使用するためにインポート
 
 /// エディタ本体 (テキストとネイティブカーソル) を描画します。
 pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
@@ -39,18 +38,22 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
             // 選択範囲のハイライト
             if let Some((sel_start, sel_end)) = selection_range {
                 // この行の先頭からのグローバルバイトオフセットを計算
-                let global_line_start_byte_offset = app.editor.buffer.lines()
+                let global_line_start_byte_offset = app
+                    .editor
+                    .buffer
+                    .lines()
                     .take(line_idx)
                     .map(|l| l.len() + 1) // +1 for newline
                     .sum::<usize>();
 
-                let char_global_start_offset = global_line_start_byte_offset + current_byte_offset_in_line;
+                let char_global_start_offset =
+                    global_line_start_byte_offset + current_byte_offset_in_line;
                 let char_global_end_offset = char_global_start_offset + char_len_bytes;
 
                 // 現在の文字が選択範囲内にあるかチェック
-                if (char_global_start_offset >= sel_start && char_global_start_offset < sel_end) ||
-                   (char_global_end_offset > sel_start && char_global_end_offset <= sel_end) ||
-                   (sel_start >= char_global_start_offset && sel_start < char_global_end_offset)
+                if (char_global_start_offset >= sel_start && char_global_start_offset < sel_end)
+                    || (char_global_end_offset > sel_start && char_global_end_offset <= sel_end)
+                    || (sel_start >= char_global_start_offset && sel_start < char_global_end_offset)
                 {
                     style = style.bg(Color::Rgb(50, 50, 100)); // 選択色
                 }
@@ -67,7 +70,6 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
     if editor_content.is_empty() {
         lines_to_display.push(Line::from(vec![Span::raw("")]));
     }
-
 
     let mut paragraph = Paragraph::new(lines_to_display)
         .block(Block::default().borders(Borders::NONE)) // 枠線なし
