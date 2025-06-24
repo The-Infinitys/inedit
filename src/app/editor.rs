@@ -1,7 +1,7 @@
 // src/app/editor.rs
 
 use super::cursor::Cursor;
-use arboard::Clipboard;
+use arboard::Clipboard; // すでにインポート済み
 use ratatui::layout::Rect;
 use std::fs;
 use std::io;
@@ -318,18 +318,30 @@ impl Editor {
     }
 
     /// 選択された範囲のテキストをコピーします。
+    /// クリップボードが利用可能ならOSクリップボードにも書き込む
     pub fn copy_selection(&mut self) -> Option<String> {
         if let Some((start, end)) = self.get_selection_range() {
-            Some(self.buffer[start..end].to_string())
+            let text = self.buffer[start..end].to_string();
+            // OSクリップボードに書き込む（失敗しても無視）
+            if let Ok(mut clipboard) = Clipboard::new() {
+                let _ = clipboard.set_text(text.clone());
+            }
+            Some(text)
         } else {
             None
         }
     }
 
     /// 選択された範囲のテキストを切り取り、バッファから削除します。
+    /// クリップボードが利用可能ならOSクリップボードにも書き込む
     pub fn cut_selection(&mut self) -> Option<String> {
         if let Some((start_byte_offset, end_byte_offset)) = self.get_selection_range() {
             let cut_text = self.buffer[start_byte_offset..end_byte_offset].to_string();
+
+            // OSクリップボードに書き込む（失敗しても無視）
+            if let Ok(mut clipboard) = Clipboard::new() {
+                let _ = clipboard.set_text(cut_text.clone());
+            }
 
             // 切り取り後のカーソル位置を、選択範囲の開始位置に調整する
             // バイトオフセットから新しいカーソル座標を計算
@@ -366,6 +378,21 @@ impl Editor {
 
         let new_cursor_offset = current_offset + text.len(); // 新しいカーソル位置のバイトオフセット
         self.set_cursor_from_byte_offset(new_cursor_offset, false); // カーソル位置を更新し、選択を解除
+    }
+
+    /// OSクリップボードから貼り付ける。失敗した場合はapp.clipboardを使う
+    pub fn paste_from_clipboard(&mut self, clipboard: &Option<String>) {
+        // OSクリップボードが利用可能ならそちらを優先
+        if let Ok(mut sys_clip) = Clipboard::new() {
+            if let Ok(text) = sys_clip.get_text() {
+                self.paste_text(&text);
+                return;
+            }
+        }
+        // 失敗した場合はapp.clipboardを使う
+        if let Some(text) = clipboard {
+            self.paste_text(text);
+        }
     }
 
     /// カーソル位置に文字を挿入します。
@@ -799,18 +826,19 @@ impl Editor {
     }
 
     /// app.clipboardから貼り付ける（OSクリップボードは参照しない）
-    pub fn paste_from_clipboard(&mut self, clipboard: &Option<String>) {
-        if let Some(text) = clipboard {
-            self.push_undo();
-            if self.cursor.is_selecting() {
-                self.cut_selection();
-            }
-            let current_offset = self.get_cursor_byte_offset();
-            self.buffer.insert_str(current_offset, text);
-            let new_cursor_offset = current_offset + text.len();
-            self.set_cursor_from_byte_offset(new_cursor_offset, false);
-        }
-    }
+    // pub fn paste_from_clipboard(&mut self, clipboard: &Option<String>) {
+    //     // OSクリップボードが利用可能ならそちらを優先
+    //     if let Ok(mut sys_clip) = Clipboard::new() {
+    //         if let Ok(text) = sys_clip.get_text() {
+    //             self.paste_text(&text);
+    //             return;
+    //         }
+    //     }
+    //     // 失敗した場合はapp.clipboardを使う
+    //     if let Some(text) = clipboard {
+    //         self.paste_text(text);
+    //     }
+    // }
 
     /// 編集操作の前に呼び出して履歴を積む
     fn push_undo(&mut self) {
