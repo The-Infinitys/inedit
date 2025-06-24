@@ -97,7 +97,7 @@ impl App {
             let temp_file = PathBuf::from(".");
             let temp_path = original_path
                 .parent()
-                .unwrap_or_else(|| temp_file.as_path())
+                .unwrap_or(temp_file.as_path())
                 .join(temp_filename);
             app.temp_path = Some(temp_path.clone());
 

@@ -70,7 +70,7 @@ impl Cursor {
             if selection_start_y_x == current_pos_y_x {
                 None
             } else {
-                let mut points = vec![selection_start_y_x, current_pos_y_x];
+                let mut points = [selection_start_y_x, current_pos_y_x];
                 // y座標でソートし、yが同じ場合はx座標でソート
                 points.sort_unstable();
                 Some((points[0], points[1]))

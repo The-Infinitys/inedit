@@ -31,7 +31,7 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
         let mut current_byte_offset_in_line = 0;
 
         // 文字ごとに処理して、選択状態を考慮したスタイルを適用
-        for (_char_idx, c) in line_str.chars().enumerate() {
+        for c in line_str.chars() {
             let char_len_bytes = c.len_utf8();
 
             let mut style = Style::default();
