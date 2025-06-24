@@ -101,8 +101,8 @@ impl Editor {
         let viewport_height = viewport_area.height;
         let viewport_width = viewport_area.width;
 
-        const PADDING_Y: u16 = 1; // 垂直方向のパディング
-        const PADDING_X: u16 = 1; // 水平方向のパディング
+        const PADDING_Y: u16 = 3; // 垂直方向のパディングを調整
+        const PADDING_X: u16 = 5; // 水平方向のパディングを調整
 
         // 垂直スクロール (Y軸)
         // カーソルが上端に近づいた場合
