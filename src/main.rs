@@ -38,3 +38,4 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>) -> io::Resu
     }
     Ok(())
 }
+

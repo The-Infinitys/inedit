@@ -2,9 +2,6 @@
 
 use crate::app::App;
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-// msg!とemsg!マクロをインポート（main.rsで#[macro_use] extern crate <your_crate_name>;があれば不要）
-// または、src/main.rsで `use crate::components::msg::{msg, emsg};` のように宣言する必要があります。
-// ここでは、マクロがどこか（例えばmain.rs）でグローバルに利用可能であると仮定します。
 use crate::{msg, emsg};
 
 /// イベントを処理し、アプリケーションの状態を更新します。
@@ -51,7 +48,8 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
                     }
                     KeyCode::Char('x') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+X で切り取り
-                        if app.editor.cut_selection().is_some() {
+                        if let Some(cut_text) = app.editor.cut_selection() {
+                            app.clipboard = Some(cut_text);
                              msg!(app, "選択範囲をクリップボードに切り取りました。");
                         } else {
                             msg!(app, "切り取る選択範囲がありません。");
@@ -61,6 +59,8 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
                         // Ctrl+V でペースト
                         if let Some(text_to_paste) = &app.clipboard {
                             app.editor.paste_text(text_to_paste);
+                            // ペースト後、バッファ内容が変わるので差分を再計算
+                            app.calculate_diff_status();
                             msg!(app, "クリップボードの内容をペーストしました。");
                         } else {
                             msg!(app, "クリップボードが空です。");
@@ -71,32 +71,45 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
                         app.editor.select_all();
                         msg!(app, "全選択しました。");
                     }
+                    KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::ALT) => {
+                        // Alt+Z で折り返し表示モードをトグル
+                        app.word_wrap_enabled = !app.word_wrap_enabled;
+                        app.calculate_diff_status(); // 折り返しモード変更でもDiff再計算（状態が変化したため）
+                        if app.word_wrap_enabled {
+                            msg!(app, "折り返し表示モード: ON");
+                        } else {
+                            msg!(app, "折り返し表示モード: OFF");
+                        }
+                    }
 
                     // テキスト挿入
                     KeyCode::Char(c) => {
                         // Ctrlキーが押されていない通常の文字入力
-                        // Modifiers::ALT、Modifiers::CONTROLは除外して通常の文字入力とみなす
                         if !key.modifiers.contains(KeyModifiers::CONTROL)
                             && !key.modifiers.contains(KeyModifiers::ALT)
                         {
                             app.editor.insert_char(c);
+                            app.calculate_diff_status(); // 文字入力後、バッファ内容が変わるので差分を再計算
                         }
                     }
                     KeyCode::Backspace => {
                         // Backspaceキー
                         app.editor.delete_previous_char();
+                        app.calculate_diff_status(); // 削除後、バッファ内容が変わるので差分を再計算
                     }
                     KeyCode::Delete => {
                         // Deleteキー
                         app.editor.delete_current_char();
+                        app.calculate_diff_status(); // 削除後、バッファ内容が変わるので差分を再計算
                     }
                     KeyCode::Enter => {
                         // Enterキー (改行)
                         app.editor.insert_char('\n');
+                        app.calculate_diff_status(); // 改行後、バッファ内容が変わるので差分を再計算
                     }
                     KeyCode::Tab => {
                         // Tabキー (簡易的にスペース4つを挿入)
-                        app.editor.paste_text("    ");
+                        app.editor.paste_text("    "); // paste_textは内部でcalculate_diff_statusを呼び出す
                     }
 
                     // カーソル移動

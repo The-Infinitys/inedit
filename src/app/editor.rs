@@ -108,18 +108,26 @@ impl Editor {
         }
         self.scroll_offset_y = self.scroll_offset_y.max(0); // 最小値は0
 
-        // 水平スクロール (X軸)
-        // カーソルが左端に近づいた場合
+        // 水平スクロール (X軸) - 行の長さも考慮
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        let current_line_len = if (cursor_y as usize) < lines.len() {
+            lines[cursor_y as usize].chars().count() as u16
+        } else {
+            0
+        };
+
         if cursor_x < self.scroll_offset_x + PADDING_X {
+            // カーソルがビューポートの左端より左に移動した場合
             self.scroll_offset_x = cursor_x.saturating_sub(PADDING_X);
-        }
-        // カーソルが右端に近づいた場合
-        if cursor_x >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X) {
+        } else if cursor_x >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X) {
+            // カーソルがビューポートの右端より右に移動した場合
+            // 注: 右端にカーソルがある場合、その文字は見えるべきなので +1 は不要な場合があるが、
+            // ターミナルの表示幅によっては1文字分の余裕が欲しいこともあるため、ここでは簡潔に +1
             self.scroll_offset_x = cursor_x.saturating_add(1).saturating_sub(viewport_width).saturating_add(PADDING_X);
         }
         self.scroll_offset_x = self.scroll_offset_x.max(0); // 最小値は0
 
-        // スクロールオフセットがバッファの範囲を超えないように最終調整
+        // スクロールオフセットがマイナスにならないように、またバッファの範囲を超えないように調整
         let total_lines = self.buffer.lines().count() as u16;
         if total_lines > viewport_height {
             self.scroll_offset_y = self.scroll_offset_y.min(total_lines.saturating_sub(viewport_height));
@@ -127,11 +135,6 @@ impl Editor {
             self.scroll_offset_y = 0; // コンテンツがビューポートより短い場合、垂直スクロールは不要
         }
 
-        let current_line_len = if (cursor_y as usize) < self.buffer.lines().count() {
-            self.buffer.lines().nth(cursor_y as usize).unwrap_or("").chars().count() as u16
-        } else {
-            0
-        };
         if current_line_len > viewport_width {
             self.scroll_offset_x = self.scroll_offset_x.min(current_line_len.saturating_sub(viewport_width));
         } else {
