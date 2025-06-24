@@ -141,55 +141,30 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
             app.editor.redo();
             app.calculate_diff_status();
             msg!(app, "やり直しました。");
-        }  else if bindings.copy.matches(key) {
-            if let Some(text) = app.editor.copy_selection_to_clipboard() {
+        } else if bindings.cut.matches(key) {
+            if let Some(text) = app.editor.copy_selection() {
+                app.clipboard = Some(text.clone());
+                app.editor.cut_selection();
+                app.calculate_diff_status();
+                msg!(app, "選択範囲を切り取りクリップボードにコピーしました。");
+            } else {
+                msg!(app, "切り取る選択範囲がありません。");
+            }
+        } else if bindings.copy.matches(key) {
+            if let Some(text) = app.editor.copy_selection() {
                 app.clipboard = Some(text);
                 msg!(app, "選択範囲をクリップボードにコピーしました。");
             } else {
                 msg!(app, "コピーする選択範囲がありません。");
             }
         } else if bindings.paste.matches(key) {
-            // まずOSクリップボードから取得
-            let mut pasted = None;
-            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                if let Ok(text) = clipboard.get_text() {
-                    pasted = Some(text);
-                }
-            }
-            // OSクリップボードが空ならアプリ内クリップボード
-            let text_to_paste = pasted.or_else(|| app.clipboard.clone());
-            if let Some(text) = text_to_paste {
+            if let Some(text) = app.clipboard.clone() {
                 app.editor.paste_text(&text);
                 app.calculate_diff_status();
                 msg!(app, "クリップボードの内容をペーストしました。");
             } else {
                 msg!(app, "クリップボードが空です。");
             }
-        }
-        // コピー
-        else if bindings.copy.matches(key) {
-            if let Some(text) = app.editor.copy_selection_to_clipboard() {
-                app.clipboard = Some(text);
-                msg!(app, "選択範囲をクリップボードにコピーしました。");
-            } else {
-                msg!(app, "コピーする選択範囲がありません。");
-            }
-        }
-        // カット
-        else if bindings.cut.matches(key) {
-            if let Some(cut_text) = app.editor.cut_selection() {
-                app.clipboard = Some(cut_text);
-                msg!(app, "選択範囲をクリップボードに切り取りました。");
-            } else {
-                msg!(app, "切り取る選択範囲がありません。");
-            }
-            app.calculate_diff_status();
-        }
-        // ペースト
-        else if bindings.paste.matches(key) {
-            app.editor.paste_from_clipboard(&app.clipboard);
-            app.calculate_diff_status();
-            msg!(app, "クリップボードの内容をペーストしました。");
         }
         // 全選択
         else if bindings.select_all.matches(key) {
