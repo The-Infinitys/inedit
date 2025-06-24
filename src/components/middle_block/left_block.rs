@@ -46,10 +46,9 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
         }
     }
     // 折返し1行目ごとに論理行番号をインクリメントして表示し、折返し2行目以降は空白にする
-    let mut last_buf_idx: Option<usize> = None;
     for (buf_idx, wrap_idx, _line_str) in visible_lines.iter() {
-        if Some(*buf_idx) != last_buf_idx {
-            // 新しい論理行の最初のvisual line
+        if *wrap_idx == 0 {
+            // 論理行の先頭 visual line のみ行番号を表示
             let line_number = logical_line_counter.to_string();
             let line_status = app.line_statuses.get(*buf_idx).copied().unwrap_or(LineStatus::Unchanged);
             let diff_symbol_style = match line_status {
@@ -65,10 +64,9 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
             let line_num_span = Span::styled(format!("{:>4}", line_number), theme_fg);
             let diff_span = Span::styled(format!("{} ", diff_symbol), diff_symbol_style);
             lines_to_display.push(Line::from(vec![line_num_span, diff_span]));
-            last_buf_idx = Some(*buf_idx);
             logical_line_counter += 1;
         } else {
-            // 折返し2行目以降: 行番号・差分とも空白
+            // 折返し部分には行番号・差分とも空白
             let line_num_span = Span::styled("    ", Style::default().fg(Color::DarkGray));
             let diff_span = Span::styled("  ", Style::default().fg(Color::DarkGray));
             lines_to_display.push(Line::from(vec![line_num_span, diff_span]));
