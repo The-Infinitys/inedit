@@ -40,6 +40,11 @@ pub fn render_message_display(f: &mut Frame, area: Rect, app: &App) {
         visible_messages.truncate(display_height);
     }
 
+    // 表示するメッセージがない場合は、コンポーネントを描画せず、早期リターンする
+    if visible_messages.is_empty() {
+        return;
+    }
+
     let block = Block::default()
         .borders(Borders::ALL) // 境界線
         .style(Style::default().bg(Color::DarkGray)); // 暗い背景色で通知感を出す

@@ -9,7 +9,10 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::time::Instant; // Instantをインポート
-use crate::{msg,emsg};
+
+// msg!とemsg!マクロをインポート
+use crate::{emsg, msg};
+
 /// UIに表示されるメッセージの種類を定義します。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MessageType {
@@ -44,6 +47,8 @@ impl Drop for App {
         if let Some(path) = &self.temp_path {
             if path.exists() {
                 if let Err(e) = fs::remove_file(path) {
+                    // Dropトレイト内ではAppのmut参照が完全には安全でないため、msg!/emsg!は使用しない
+                    // そのため、ここではeprintln!を維持します。
                     eprintln!(
                         "一時ファイル {:?} の削除中にエラーが発生しました: {}",
                         path, e
@@ -82,19 +87,25 @@ impl App {
                 .join(temp_filename);
             app.temp_path = Some(temp_path.clone());
 
-            eprintln!("元のファイルパス: {:?}", original_path);
-            eprintln!("一時ファイルパス: {:?}", temp_path);
+            msg!(app, "元のファイルパス: {:?}", original_path);
+            msg!(app, "一時ファイルパス: {:?}", temp_path);
 
             if temp_path.exists() {
                 match app.editor.load_from_file(&temp_path) {
                     Ok(_) => {
-                        eprintln!("一時ファイル {:?} から正常に読み込みました。", temp_path);
+                        msg!(
+                            app,
+                            "一時ファイル {:?} から正常に読み込みました。",
+                            temp_path
+                        );
                         return app;
                     }
                     Err(e) => {
-                        eprintln!(
+                        emsg!(
+                            app,
                             "一時ファイル {:?} の読み込み中にエラーが発生しました: {}。元のファイルに戻ります。",
-                            temp_path, e
+                            temp_path,
+                            e
                         );
                     }
                 }
@@ -103,46 +114,61 @@ impl App {
             if original_path.exists() {
                 match app.editor.load_from_file(&original_path) {
                     Ok(_) => {
-                        eprintln!("元のファイル {:?} を正常に読み込みました。", original_path);
+                        msg!(
+                            app,
+                            "元のファイル {:?} を正常に読み込みました。",
+                            original_path
+                        );
                         if let Err(e) = app.editor.save_to_file(&temp_path) {
-                            eprintln!(
+                            emsg!(
+                                app,
                                 "警告: 初期コンテンツを一時ファイル {:?} に書き込めませんでした: {}",
-                                temp_path, e
+                                temp_path,
+                                e
                             );
                         } else {
-                            eprintln!(
+                            msg!(
+                                app,
                                 "初期コンテンツを一時ファイル {:?} に書き込みました。",
                                 temp_path
                             );
                         }
                     }
                     Err(e) => {
-                        eprintln!(
+                        emsg!(
+                            app,
                             "元のファイル {:?} の読み込み中にエラーが発生しました: {}。空のバッファで開始します。",
-                            original_path, e
+                            original_path,
+                            e
                         );
                         if let Err(e) = fs::write(&temp_path, "") {
-                            eprintln!(
+                            emsg!(
+                                app,
                                 "警告: 空の一時ファイル {:?} を作成できませんでした: {}",
-                                temp_path, e
+                                temp_path,
+                                e
                             );
                         }
                     }
                 }
             } else {
-                eprintln!(
+                msg!(
+                    app,
                     "元のファイルが存在しません: {:?}。新しいファイルバッファと一時ファイルを作成します。",
                     file_path_str
                 );
                 if let Err(e) = fs::write(&temp_path, "") {
-                    eprintln!(
+                    emsg!(
+                        app,
                         "警告: 空の一時ファイル {:?} を作成できませんでした: {}",
-                        temp_path, e
+                        temp_path,
+                        e
                     );
                 }
             }
         } else {
-            eprintln!(
+            msg!(
+                app,
                 "ファイルパスが指定されていません。空のバッファ（プレーンテキストモード）で開始します。一時ファイルは作成されません。"
             );
         }
@@ -188,10 +214,6 @@ impl App {
     /// メッセージキューに新しいメッセージを追加します。
     /// 指定された行数を超えた場合は古いメッセージを削除します。
     pub fn add_message(&mut self, message_type: MessageType, msg: String) {
-        // メッセージをタイムスタンプ付きで追加
         self.messages.push((message_type, msg, Instant::now()));
-        // ここでは最大数制限はしない。表示側で古くなったものをフィルタリングする。
-        // もし厳密にN個だけ保持したいなら、ここで `while self.messages.len() > MAX_MESSAGES { self.messages.remove(0); }` を追加する。
-        // 今回は表示ロジックで古くなったものを表示しないため、ここでは制限しない。
     }
 }
