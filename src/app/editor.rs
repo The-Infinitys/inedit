@@ -106,7 +106,6 @@ impl Editor {
         if cursor_y >= self.scroll_offset_y + viewport_height.saturating_sub(PADDING_Y) {
             self.scroll_offset_y = cursor_y.saturating_add(1).saturating_sub(viewport_height).saturating_add(PADDING_Y);
         }
-        self.scroll_offset_y = self.scroll_offset_y; // 最小値は0
 
         // 水平スクロール (X軸) - 行の長さも考慮
         let lines: Vec<&str> = self.buffer.lines().collect();
@@ -125,7 +124,6 @@ impl Editor {
             // ターミナルの表示幅によっては1文字分の余裕が欲しいこともあるため、ここでは簡潔に +1
             self.scroll_offset_x = cursor_x.saturating_add(1).saturating_sub(viewport_width).saturating_add(PADDING_X);
         }
-        self.scroll_offset_x = self.scroll_offset_x; // 最小値は0
 
         // スクロールオフセットがマイナスにならないように、またバッファの範囲を超えないように調整
         let total_lines = self.buffer.lines().count() as u16;
@@ -523,7 +521,7 @@ impl Editor {
                 }
             }
             // 後続の行
-            for y_idx in (current_y + 1)..lines.len() {
+            for (y_idx,_item) in lines.iter().enumerate().skip(current_y + 1) {
                 let line_chars: Vec<char> = lines[y_idx].chars().collect();
                 for (x_idx, ch) in line_chars.iter().enumerate() {
                     if *ch == open_paren {
