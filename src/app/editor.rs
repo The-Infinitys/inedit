@@ -943,9 +943,15 @@ impl Editor {
             let mut wrap_idx = 0;
             let chars: Vec<char> = line.chars().collect();
             while start < chars.len() {
-                let end = (start + wrap_width).min(chars.len());
+                // wrap_widthが0の場合は無限ループになるので防止
+                let end = if wrap_width == 0 {
+                    chars.len()
+                } else {
+                    (start + wrap_width).min(chars.len())
+                };
                 let visual = chars[start..end].iter().collect::<String>();
                 result.push((buf_idx, wrap_idx, visual));
+                if end == chars.len() { break; }
                 start = end;
                 wrap_idx += 1;
             }
