@@ -9,9 +9,8 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant}; // DurationとInstantをインポート
-
-// msg!とemsg!マクロをインポート
 use crate::{emsg, msg};
+pub use crate::components::popup::{ExitPopupState, ExitPopupResult, ExitPopupOption}; // pub追加
 
 /// UIに表示されるメッセージの種類を定義します。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +29,17 @@ pub enum LineStatus {
               // 左ブロックや右ブロックで、original_bufferと比較して空白または特殊記号で表現することを検討します。
 }
 
+/// アプリケーションのイベント処理結果を定義します。
+/// これにより、メインループはイベントハンドラからの指示に基づいて動作を決定します。
+#[derive(Debug, PartialEq, Eq)]
+pub enum AppControlFlow {
+    Continue,        // アプリケーションを通常通り続行
+    Exit,            // アプリケーションを終了
+    TriggerSaveAndExit, // 保存操作を行い、その後終了
+    TriggerDiscardAndExit, // 変更を破棄し、その後終了
+    ShowExitPopup,   // 終了ポップアップを表示し、ユーザーの入力を待つ
+}
+
 /// アプリケーション全体の状態を管理します。
 pub struct App {
     pub editor: Editor,
@@ -40,6 +50,7 @@ pub struct App {
     pub original_buffer: String, // ファイル読み込み時のオリジナルコンテンツ（差分計算用）
     pub word_wrap_enabled: bool, // 折り返し表示モードのON/OFF
     pub line_statuses: Vec<LineStatus>, // 各行の差分状態
+    pub exit_popup_state: Option<ExitPopupState>, // 追加: 終了ポップアップの状態
 }
 
 impl Default for App {
@@ -53,6 +64,7 @@ impl Default for App {
             original_buffer: String::new(), // 初期化
             word_wrap_enabled: true,        // デフォルトで折り返し表示を有効
             line_statuses: Vec::new(),      // 初期化
+            exit_popup_state: None, // 初期状態ではポップアップは非表示
         }
     }
 }
@@ -259,7 +271,6 @@ impl App {
                     self.line_statuses.push(LineStatus::Modified);
                 }
             } else {
-                // original_linesよりもcurrent_linesが長い場合、これは追加された行
                 self.line_statuses.push(LineStatus::Added);
             }
         }
@@ -268,14 +279,68 @@ impl App {
         // 削除された行のギャップを表現することを検討できますが、今回は簡易的なアプローチです。
     }
 
-    /// 現在表示されているメッセージの数を返します。
-    /// これにより、UIはメッセージの数に応じて表示エリアのサイズを調整できます。
     pub fn get_visible_message_count(&self) -> u16 {
-        const MESSAGE_LIFETIME_SECS: u64 = 3; // メッセージの表示期間（秒）
+        const MESSAGE_LIFETIME_SECS: u64 = 3;
         let now = Instant::now();
         self.messages
             .iter()
             .filter(|(_, _, timestamp)| now.duration_since(*timestamp) < Duration::from_secs(MESSAGE_LIFETIME_SECS))
             .count() as u16
+    }
+
+    /// 未保存の変更があるかどうかをチェックします。
+    pub fn has_unsaved_changes(&self) -> bool {
+        self.editor.buffer != self.original_buffer
+    }
+
+    /// 終了を試みます。未保存の変更がある場合はポップアップを表示します。
+    /// このメソッドはAppControlFlowを返すべきではない（イベントハンドラが直接返すため）。
+    /// 代わりに、ポップアップを表示するかどうかを設定する。
+    pub fn trigger_exit_popup_if_needed(&mut self) {
+        if self.has_unsaved_changes() {
+            self.exit_popup_state = Some(ExitPopupState::default()); // ポップアップを表示する
+        }
+    }
+
+    /// 終了ポップアップのキーイベントを処理します。
+    pub fn handle_exit_popup_key(&mut self, key_event: &crossterm::event::KeyEvent) -> ExitPopupResult {
+        if let Some(state) = &mut self.exit_popup_state {
+            match key_event.code {
+                crossterm::event::KeyCode::Up => {
+                    state.previous();
+                    ExitPopupResult::None
+                }
+                crossterm::event::KeyCode::Down => {
+                    state.next();
+                    ExitPopupResult::None
+                }
+                crossterm::event::KeyCode::Enter => {
+                    let result = match state.selected_option {
+                        ExitPopupOption::SaveAndExit => ExitPopupResult::SaveAndExit,
+                        ExitPopupOption::DiscardAndExit => ExitPopupResult::DiscardAndExit,
+                        ExitPopupOption::Cancel => ExitPopupResult::Cancel,
+                    };
+                    self.exit_popup_state = None; // ポップアップを非表示にする
+                    result
+                }
+                crossterm::event::KeyCode::Char('s') | crossterm::event::KeyCode::Char('S') => {
+                    self.exit_popup_state = None;
+                    ExitPopupResult::SaveAndExit
+                }
+                crossterm::event::KeyCode::Char('d') | crossterm::event::KeyCode::Char('D') => {
+                    self.exit_popup_state = None;
+                    ExitPopupResult::DiscardAndExit
+                }
+                crossterm::event::KeyCode::Char('c') | crossterm::event::KeyCode::Char('C')
+                | crossterm::event::KeyCode::Esc => {
+                    self.exit_popup_state = None;
+                    ExitPopupResult::Cancel
+                }
+                _ => ExitPopupResult::None,
+            }
+        } else {
+            // ポップアップが表示されていない場合は何もしない（通常はここに到達しないはずだが安全策）
+            ExitPopupResult::None
+        }
     }
 }

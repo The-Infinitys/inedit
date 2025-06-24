@@ -1,12 +1,12 @@
 // src/event_handler.rs
 
-use crate::app::App;
+use crate::app::{App, AppControlFlow, ExitPopupResult}; // AppControlFlowをインポート
 use crate::{emsg, msg};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 
 /// イベントを処理し、アプリケーションの状態を更新します。
-/// 終了が要求された場合はtrueを返します。
-pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
+/// 戻り値はアプリケーションの次の制御フローを示します。
+pub fn handle_event(app: &mut App) -> std::io::Result<AppControlFlow> {
     // 100ミリ秒間イベントをポーリング
     if event::poll(std::time::Duration::from_millis(100))? {
         // キーイベントのみを処理
@@ -15,19 +15,50 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
             if key.kind == KeyEventKind::Press {
                 let extend_selection = key.modifiers.contains(KeyModifiers::SHIFT);
 
+                // 終了ポップアップが表示されている場合は、ポップアップのキーイベントを優先的に処理
+                if app.exit_popup_state.is_some() {
+                    let popup_result = app.handle_exit_popup_key(&key);
+                    match popup_result {
+                        ExitPopupResult::SaveAndExit => {
+                            return Ok(AppControlFlow::TriggerSaveAndExit);
+                        }
+                        ExitPopupResult::DiscardAndExit => {
+                            return Ok(AppControlFlow::TriggerDiscardAndExit);
+                        }
+                        ExitPopupResult::Cancel => return Ok(AppControlFlow::Continue), // ポップアップが閉じて続行
+                        ExitPopupResult::None => return Ok(AppControlFlow::ShowExitPopup), // ポップアップ内で選択中
+                    }
+                }
+
+                // ポップアップが表示されていない場合の通常のキーイベント処理
                 match key.code {
                     // アプリケーション終了コマンド
                     KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        msg!(app, "アプリケーションを終了します。");
-                        return Ok(true); // Ctrl+Qで終了
+                        app.trigger_exit_popup_if_needed(); // 終了ポップアップを試みる
+                        if app.exit_popup_state.is_some() {
+                            return Ok(AppControlFlow::ShowExitPopup); // ポップアップが表示されたらそれを表示
+                        } else {
+                            msg!(app, "アプリケーションを終了します。");
+                            return Ok(AppControlFlow::Exit); // 未保存の変更がなければ終了
+                        }
                     }
                     KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                        msg!(app, "アプリケーションを終了します。");
-                        return Ok(true); // Ctrl+Wで終了
+                        app.trigger_exit_popup_if_needed(); // 終了ポップアップを試みる
+                        if app.exit_popup_state.is_some() {
+                            return Ok(AppControlFlow::ShowExitPopup); // ポップアップが表示されたらそれを表示
+                        } else {
+                            msg!(app, "アプリケーションを終了します。");
+                            return Ok(AppControlFlow::Exit); // 未保存の変更がなければ終了
+                        }
                     }
                     KeyCode::Esc => {
-                        msg!(app, "アプリケーションを終了します。");
-                        return Ok(true); // Escキーで終了
+                        app.trigger_exit_popup_if_needed(); // 終了ポップアップを試みる
+                        if app.exit_popup_state.is_some() {
+                            return Ok(AppControlFlow::ShowExitPopup); // ポップアップが表示されたらそれを表示
+                        } else {
+                            msg!(app, "アプリケーションを終了します。");
+                            return Ok(AppControlFlow::Exit); // 未保存の変更がなければ終了
+                        }
                     }
 
                     // 編集コマンド
@@ -54,11 +85,12 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
                         } else {
                             msg!(app, "切り取る選択範囲がありません。");
                         }
+                        app.calculate_diff_status(); // カット後、バッファ内容が変わるので差分を再計算
                     }
                     KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                         // Ctrl+V でペースト
-                        if let Some(text_to_paste) = &app.clipboard {
-                            app.editor.paste_text(text_to_paste);
+                        if let Some(text_to_paste) = app.clipboard.clone() {
+                            app.editor.paste_text(&text_to_paste);
                             // ペースト後、バッファ内容が変わるので差分を再計算
                             app.calculate_diff_status();
                             msg!(app, "クリップボードの内容をペーストしました。");
@@ -84,7 +116,7 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
 
                     // テキスト挿入
                     KeyCode::Char(c) => {
-                        // Ctrlキーが押されていない通常の文字入力
+                        // CtrlキーやAltキーが押されていない通常の文字入力
                         if !key.modifiers.contains(KeyModifiers::CONTROL)
                             && !key.modifiers.contains(KeyModifiers::ALT)
                         {
@@ -110,6 +142,7 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
                     KeyCode::Tab => {
                         // Tabキー (簡易的にスペース4つを挿入)
                         app.editor.paste_text("    "); // paste_textは内部でcalculate_diff_statusを呼び出す
+                        app.calculate_diff_status(); // Tabでpaste_textを呼んだ場合も明示的にdiff再計算
                     }
 
                     // カーソル移動
@@ -138,5 +171,5 @@ pub fn handle_event(app: &mut App) -> std::io::Result<bool> {
             }
         }
     }
-    Ok(false) // 終了が要求されていない場合はfalseを返す
+    Ok(AppControlFlow::Continue) // イベントが処理され、終了が要求されていない場合は続行
 }
