@@ -930,7 +930,7 @@ impl Editor {
             }
         }
     }
-    /// 指定幅でwrapしたvisual linesを返す
+    /// 指定幅でwrapしたvisual linesを返す（インデント保持）
     pub fn get_visual_lines_with_width(&self, wrap_width: usize) -> Vec<(usize, usize, String)> {
         let mut result = Vec::new();
         let lines: Vec<&str> = self.buffer.lines().collect();
@@ -939,17 +939,27 @@ impl Editor {
                 result.push((buf_idx, 0, String::new()));
                 continue;
             }
+            // インデント部分を抽出
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
             let mut start = 0;
             let mut wrap_idx = 0;
             let chars: Vec<char> = line.chars().collect();
             while start < chars.len() {
-                // wrap_widthが0の場合は無限ループになるので防止
-                let end = if wrap_width == 0 {
+                let is_first = wrap_idx == 0;
+                let available_width = if is_first || wrap_width == usize::MAX {
+                    wrap_width
+                } else {
+                    wrap_width.saturating_sub(indent.chars().count())
+                };
+                let end = if available_width == 0 || available_width == usize::MAX {
                     chars.len()
                 } else {
-                    (start + wrap_width).min(chars.len())
+                    (start + available_width).min(chars.len())
                 };
-                let visual = chars[start..end].iter().collect::<String>();
+                let mut visual = chars[start..end].iter().collect::<String>();
+                if !is_first && !indent.is_empty() {
+                    visual = format!("{}{}", indent, visual);
+                }
                 result.push((buf_idx, wrap_idx, visual));
                 if end == chars.len() { break; }
                 start = end;
@@ -957,5 +967,123 @@ impl Editor {
             }
         }
         result
+    }
+    /// 指定幅でwrapしたvisual linesを返す（インデント保持、単語単位wrap）
+    pub fn get_visual_lines_with_width_word_wrap(&self, wrap_width: usize) -> Vec<(usize, usize, String)> {
+        let mut result = Vec::new();
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        for (buf_idx, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                result.push((buf_idx, 0, String::new()));
+                continue;
+            }
+            // インデント部分を抽出
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            let mut wrap_idx = 0;
+            let mut current = 0;
+            let chars: Vec<char> = line.chars().collect();
+            let mut first = true;
+            while current < chars.len() {
+                let available_width = if first || wrap_width == usize::MAX {
+                    wrap_width
+                } else {
+                    wrap_width.saturating_sub(indent.chars().count())
+                };
+                if available_width == 0 || available_width == usize::MAX {
+                    let visual = chars[current..].iter().collect::<String>();
+                    result.push((buf_idx, wrap_idx, if first { visual.clone() } else { format!("{}{}", indent, visual) }));
+                    break;
+                }
+                // 単語単位でwrap
+                let mut end = current + available_width;
+                if end >= chars.len() {
+                    end = chars.len();
+                } else {
+                    // 途中で単語が切れる場合、直前の空白まで戻す
+                    let mut back = end;
+                    while back > current && !chars[back-1].is_whitespace() {
+                        back -= 1;
+                    }
+                    if back > current {
+                        end = back;
+                      }
+                }
+                if end == current {
+                    // 1単語がwrap幅を超える場合は強制分割
+                    end = (current + wrap_width).min(chars.len());
+                }
+                let mut visual = chars[current..end].iter().collect::<String>();
+                if !first && !indent.is_empty() {
+                    visual = format!("{}{}", indent, visual);
+                }
+                result.push((buf_idx, wrap_idx, visual));
+                if end == chars.len() { break; }
+                current = end;
+                wrap_idx += 1;
+                first = false;
+            }
+        }
+        result
+    }
+
+    /// 指定したvisual lineのグローバルバイトオフセットを返す（word wrap対応）
+    pub fn get_visual_line_global_offset(&self, buf_idx: usize, wrap_idx: usize, wrap_width: usize) -> usize {
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        if buf_idx >= lines.len() { return 0; }
+        let mut offset = 0;
+        // buf_idxまでの全行のバイト数+改行
+        for i in 0..buf_idx {
+            offset += lines[i].len();
+            offset += 1; // 改行
+        }
+        // wrap_idx分だけこの行の先頭からバイト数を加算
+        let line = lines[buf_idx];
+        let chars: Vec<char> = line.chars().collect();
+        let mut current = 0;
+        let mut widx = 0;
+        let indent_len = line.chars().take_while(|c| c.is_whitespace()).count();
+        while widx < wrap_idx && current < chars.len() {
+            let available_width = if widx == 0 || wrap_width == usize::MAX {
+                wrap_width
+            } else {
+                wrap_width.saturating_sub(indent_len)
+            };
+            let mut end = current + available_width;
+            if end >= chars.len() {
+                end = chars.len();
+            } else {
+                let mut back = end;
+                while back > current && !chars[back-1].is_whitespace() {
+                    back -= 1;
+                }
+                if back > current {
+                    end = back;
+                }
+            }
+            if end == current {
+                end = (current + available_width).min(chars.len());
+            }
+            for c in &chars[current..end] {
+                offset += c.len_utf8();
+            }
+            current = end;
+            widx += 1;
+        }
+        offset
+    }
+
+    /// 現在のカーソル位置がvisual_linesの何番目か、その中で何文字目かを返す（word wrap対応）
+    pub fn get_cursor_visual_position(&self, wrap_width: usize) -> (usize, usize) {
+        let visual_lines = self.get_visual_lines_with_width_word_wrap(wrap_width);
+        for (i, (buf_idx, wrap_idx, line_str)) in visual_lines.iter().enumerate() {
+            if *buf_idx == self.cursor.y as usize && *wrap_idx == self.cursor_wrap_idx {
+                // カーソルのxはwrap_idx区間内での相対位置
+                let indent_len = line_str.chars().take_while(|c| c.is_whitespace()).count();
+                let start = if *wrap_idx == 0 { 0 } else { indent_len };
+                let rel_x = self.cursor.x.saturating_sub(start as u16) as usize;
+                return (i, rel_x.min(line_str.chars().count()));
+            }
+        }
+        (0, 0)
     }
 }
