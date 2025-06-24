@@ -139,11 +139,12 @@ impl Editor {
         // 現在の行の全幅も計算（スクロール範囲の調整用）
         let current_line_visual_width = RatatuiLine::from(current_line_content).width() as u16;
 
-
         if visual_cursor_x_on_line < self.scroll_offset_x + PADDING_X {
             // カーソルがビューポートの左端より左に移動した場合
             self.scroll_offset_x = visual_cursor_x_on_line.saturating_sub(PADDING_X);
-        } else if visual_cursor_x_on_line >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X) {
+        } else if visual_cursor_x_on_line
+            >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X)
+        {
             // カーソルがビューポートの右端より右に移動した場合
             // カーソル自体を含めるため、少なくとも1セル分動かすことを考慮（正確な幅はParagraphが計算する）
             self.scroll_offset_x = visual_cursor_x_on_line

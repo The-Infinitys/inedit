@@ -50,12 +50,14 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
         let global_line_end_byte_offset = global_line_start_byte_offset + line_str.len();
 
         // この行が選択範囲と重なっているか
-        let line_selected = sel_start_byte < global_line_end_byte_offset && sel_end_byte > global_line_start_byte_offset;
+        let line_selected = sel_start_byte < global_line_end_byte_offset
+            && sel_end_byte > global_line_start_byte_offset;
 
         for (syntect_style, text) in highlighted_segments {
             let base_style = super::super::super::app::features::syntax::Highlighter::convert_syntect_style_to_ratatui_style(syntect_style);
 
-            let segment_global_start_offset = global_line_start_byte_offset + current_byte_offset_in_line;
+            let segment_global_start_offset =
+                global_line_start_byte_offset + current_byte_offset_in_line;
             let segment_global_end_offset = segment_global_start_offset + text.len();
 
             // このセグメントが選択範囲と重なる場合のみ色を変える
@@ -79,7 +81,10 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
                         spans.push(Span::styled(left.to_string(), base_style));
                     }
                     if !mid.is_empty() {
-                        spans.push(Span::styled(mid.to_string(), base_style.bg(Color::Rgb(50, 50, 100))));
+                        spans.push(Span::styled(
+                            mid.to_string(),
+                            base_style.bg(Color::Rgb(50, 50, 100)),
+                        ));
                     }
                     if !right.is_empty() {
                         spans.push(Span::styled(right.to_string(), base_style));

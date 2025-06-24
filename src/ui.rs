@@ -7,8 +7,8 @@ use crate::{
         middle_block::editor_block::render_editor_block,
         middle_block::left_block::render_left_block,
         middle_block::right_block::render_right_block,
+        popup::{PopupKind, render_popup}, // ← 修正
         top_bar::render_top_bar,
-        popup::{render_popup, PopupKind}, // ← 修正
     },
 };
 use ratatui::{
@@ -105,12 +105,7 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
                 exit_popup_state,
             );
         } else {
-            render_popup(
-                f,
-                size,
-                PopupKind::Exit,
-                exit_popup_state,
-            );
+            render_popup(f, size, PopupKind::Exit, exit_popup_state);
         }
     }
 }

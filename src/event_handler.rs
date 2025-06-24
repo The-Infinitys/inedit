@@ -18,7 +18,8 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
                 match key.code {
                     KeyCode::Enter => {
                         if !popup_state.input_text.is_empty() {
-                            app.target_path = Some(std::path::PathBuf::from(&popup_state.input_text));
+                            app.target_path =
+                                Some(std::path::PathBuf::from(&popup_state.input_text));
                             popup_state.input_mode = false;
                             popup_state.input_text.clear();
                             // SaveAndExitならexit、そうでなければContinue
@@ -78,7 +79,8 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
                             // 念のためexit_popup_stateがNoneなら新規作成
                             app.exit_popup_state = Some(Default::default());
                             if let Some(popup_state) = app.exit_popup_state.as_mut() {
-                                popup_state.selected_option = crate::app::ExitPopupOption::SaveAndExit;
+                                popup_state.selected_option =
+                                    crate::app::ExitPopupOption::SaveAndExit;
                                 popup_state.input_mode = true;
                                 popup_state.input_text.clear();
                             }

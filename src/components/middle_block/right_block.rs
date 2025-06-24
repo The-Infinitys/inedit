@@ -46,7 +46,10 @@ pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
             // レール部分の色
             line_content.push('|');
         }
-        spans.push(Span::styled(line_content, Style::default().fg(Color::DarkGray))); // スクロールバーの色は固定
+        spans.push(Span::styled(
+            line_content,
+            Style::default().fg(Color::DarkGray),
+        )); // スクロールバーの色は固定
 
         // 差分マーカーの描画 (該当する行がある場合のみ)
         let corresponding_editor_line_idx = (app.editor.scroll_offset_y + y_on_screen) as usize;

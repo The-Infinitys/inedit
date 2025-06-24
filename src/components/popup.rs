@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    style::{Color, Style, Modifier},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph},
 };
@@ -57,10 +57,7 @@ impl ExitPopupState {
 /// ポップアップの種類
 pub enum PopupKind<'a> {
     Exit,
-    Input {
-        message: &'a str,
-        input: &'a str,
-    },
+    Input { message: &'a str, input: &'a str },
 }
 
 /// ポップアップ描画の共通関数
@@ -69,11 +66,25 @@ pub fn render_popup(f: &mut Frame, area: Rect, kind: PopupKind, state: &ExitPopu
         PopupKind::Exit => {
             let text = vec![
                 Line::from(Span::raw("")),
-                Line::from(Span::raw("You have unsaved changes. Do you want to save them?")),
+                Line::from(Span::raw(
+                    "You have unsaved changes. Do you want to save them?",
+                )),
                 Line::from(Span::raw("")),
-                render_option(state.selected_option, ExitPopupOption::SaveAndExit, "  [S]ave and Exit  "),
-                render_option(state.selected_option, ExitPopupOption::DiscardAndExit, "  [D]iscard and Exit  "),
-                render_option(state.selected_option, ExitPopupOption::Cancel, "  [C]ancel  "),
+                render_option(
+                    state.selected_option,
+                    ExitPopupOption::SaveAndExit,
+                    "  [S]ave and Exit  ",
+                ),
+                render_option(
+                    state.selected_option,
+                    ExitPopupOption::DiscardAndExit,
+                    "  [D]iscard and Exit  ",
+                ),
+                render_option(
+                    state.selected_option,
+                    ExitPopupOption::Cancel,
+                    "  [C]ancel  ",
+                ),
                 Line::from(Span::raw("")),
             ];
             ("Unsaved Changes", text, 9)
@@ -83,16 +94,27 @@ pub fn render_popup(f: &mut Frame, area: Rect, kind: PopupKind, state: &ExitPopu
                 Line::from(Span::raw("")),
                 Line::from(Span::styled(message, Style::default().fg(Color::Yellow))),
                 Line::from(Span::raw("")),
-                Line::from(Span::styled(format!("> {}", input), Style::default().fg(Color::White))),
+                Line::from(Span::styled(
+                    format!("> {}", input),
+                    Style::default().fg(Color::White),
+                )),
                 Line::from(Span::raw("")),
-                Line::from(Span::styled("Backspaceでキャンセル", Style::default().fg(Color::DarkGray))),
+                Line::from(Span::styled(
+                    "Backspaceでキャンセル",
+                    Style::default().fg(Color::DarkGray),
+                )),
             ];
             ("Input", text, 8)
         }
     };
 
     let block = Block::default()
-        .title(Span::styled(title, Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD)))
+        .title(Span::styled(
+            title,
+            Style::default()
+                .fg(Color::LightRed)
+                .add_modifier(Modifier::BOLD),
+        ))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .style(Style::default().bg(Color::DarkGray).fg(Color::White));
@@ -107,7 +129,9 @@ pub fn render_popup(f: &mut Frame, area: Rect, kind: PopupKind, state: &ExitPopu
 
     f.render_widget(Clear, popup_area);
     f.render_widget(
-        Paragraph::new(lines).block(block).alignment(Alignment::Center),
+        Paragraph::new(lines)
+            .block(block)
+            .alignment(Alignment::Center),
         popup_area,
     );
 }

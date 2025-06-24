@@ -13,7 +13,8 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
     let editor_lines: Vec<&str> = app.editor.buffer.lines().collect();
 
     let start_line_idx = app.editor.scroll_offset_y as usize;
-    let end_line_idx_in_buffer = (editor_lines.len() as u16).min(app.editor.scroll_offset_y + area.height) as usize;
+    let end_line_idx_in_buffer =
+        (editor_lines.len() as u16).min(app.editor.scroll_offset_y + area.height) as usize;
 
     // テーマの背景色と前景色を取得
     let theme_bg = app.highlighter.get_background_color();
@@ -46,7 +47,7 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
         // 行番号を右寄せ、差分シンボルをその左に配置
         let line_num_span = Span::styled(
             format!("{:>4}", line_number), // 行番号を4桁に右寄せ
-            theme_fg, // テーマの前景色を適用
+            theme_fg,                      // テーマの前景色を適用
         );
         let diff_span = Span::styled(
             format!("{} ", diff_symbol), // シンボルとスペース
@@ -63,7 +64,6 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
             Style::default().fg(Color::DarkGray), // 空行の色
         )]));
     }
-
 
     let block = Block::default()
         .borders(Borders::RIGHT) // 右側に境界線

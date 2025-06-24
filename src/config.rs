@@ -104,7 +104,9 @@ impl KeyEventConfig {
             event_modifiers_vec.push("Shift");
         }
 
-        self.modifiers.iter().all(|m| event_modifiers_vec.contains(&m.as_str()))
+        self.modifiers
+            .iter()
+            .all(|m| event_modifiers_vec.contains(&m.as_str()))
     }
 }
 
