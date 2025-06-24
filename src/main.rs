@@ -1,5 +1,3 @@
-// src/main.rs
-
 use crossterm::{
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
