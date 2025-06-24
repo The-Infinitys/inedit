@@ -798,20 +798,17 @@ impl Editor {
         }
     }
 
-    pub fn paste_from_clipboard(&mut self) {
-        let mut clipboard = Clipboard::new().ok();
-        if let Some(ref mut cb) = clipboard {
-            if let Ok(text) = cb.get_text() {
-                self.push_undo();
-                // 選択範囲があれば切り取る
-                if self.cursor.is_selecting() {
-                    self.cut_selection();
-                }
-                let current_offset = self.get_cursor_byte_offset();
-                self.buffer.insert_str(current_offset, &text);
-                let new_cursor_offset = current_offset + text.len();
-                self.set_cursor_from_byte_offset(new_cursor_offset, false);
+    /// app.clipboardから貼り付ける（OSクリップボードは参照しない）
+    pub fn paste_from_clipboard(&mut self, clipboard: &Option<String>) {
+        if let Some(text) = clipboard {
+            self.push_undo();
+            if self.cursor.is_selecting() {
+                self.cut_selection();
             }
+            let current_offset = self.get_cursor_byte_offset();
+            self.buffer.insert_str(current_offset, text);
+            let new_cursor_offset = current_offset + text.len();
+            self.set_cursor_from_byte_offset(new_cursor_offset, false);
         }
     }
 

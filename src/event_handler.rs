@@ -142,11 +142,7 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
             app.calculate_diff_status();
             msg!(app, "やり直しました。");
         }  else if bindings.copy.matches(key) {
-            if let Some(text) = app.editor.copy_selection() {
-                // OSクリップボードにもコピー
-                if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                    let _ = clipboard.set_text(text.clone());
-                }
+            if let Some(text) = app.editor.copy_selection_to_clipboard() {
                 app.clipboard = Some(text);
                 msg!(app, "選択範囲をクリップボードにコピーしました。");
             } else {
@@ -172,7 +168,8 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
         }
         // コピー
         else if bindings.copy.matches(key) {
-            if app.editor.copy_selection().is_some() {
+            if let Some(text) = app.editor.copy_selection_to_clipboard() {
+                app.clipboard = Some(text);
                 msg!(app, "選択範囲をクリップボードにコピーしました。");
             } else {
                 msg!(app, "コピーする選択範囲がありません。");
@@ -190,13 +187,9 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
         }
         // ペースト
         else if bindings.paste.matches(key) {
-            if let Some(text_to_paste) = app.clipboard.clone() {
-                app.editor.paste_text(&text_to_paste);
-                app.calculate_diff_status();
-                msg!(app, "クリップボードの内容をペーストしました。");
-            } else {
-                msg!(app, "クリップボードが空です。");
-            }
+            app.editor.paste_from_clipboard(&app.clipboard);
+            app.calculate_diff_status();
+            msg!(app, "クリップボードの内容をペーストしました。");
         }
         // 全選択
         else if bindings.select_all.matches(key) {
