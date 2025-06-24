@@ -155,14 +155,14 @@ fn get_config_path() -> Option<PathBuf> {
         let config_dir = proj_dirs.config_dir();
         if !config_dir.exists() {
             // ディレクトリが存在しない場合は作成を試みる
-            if let Err(e) = fs::create_dir_all(config_dir) {
-                eprintln!("Error creating config directory {:?}: {}", config_dir, e);
+            if let Err(_e) = fs::create_dir_all(config_dir) {
+                // eprintln!("Error creating config directory {:?}: {}", config_dir, e);
                 return None;
             }
         }
         Some(config_dir.join(CONFIG_FILE_NAME))
     } else {
-        eprintln!("Could not determine config directory.");
+        // eprintln!("Could not determine config directory.");
         None
     }
 }
@@ -174,25 +174,25 @@ pub fn load_or_create_config() -> Config {
             match fs::read_to_string(&config_path) {
                 Ok(content) => match serde_yaml::from_str(&content) {
                     Ok(config) => {
-                        eprintln!("Config loaded from {:?}", config_path);
+                        // eprintln!("Config loaded from {:?}", config_path);
                         return config;
                     }
-                    Err(e) => {
-                        eprintln!("Error parsing config file {:?}: {}", config_path, e);
+                    Err(_e) => {
+                        // eprintln!("Error parsing config file {:?}: {}", config_path, e);
                         // パースエラーの場合はデフォルト設定を返し、上書き保存
                         let default_config = Config::default();
-                        if let Err(e) = save_config(&default_config) {
-                            eprintln!("Error saving default config: {}", e);
+                        if let Err(_e) = save_config(&default_config) {
+                            // eprintln!("Error saving default config: {}", e);
                         }
                         return default_config;
                     }
                 },
-                Err(e) => {
-                    eprintln!("Error reading config file {:?}: {}", config_path, e);
+                Err(_e) => {
+                    // eprintln!("Error reading config file {:?}: {}", config_path, e);
                     // 読み込みエラーの場合もデフォルト設定を返し、上書き保存
                     let default_config = Config::default();
-                    if let Err(e) = save_config(&default_config) {
-                        eprintln!("Error saving default config: {}", e);
+                    if let Err(_e) = save_config(&default_config) {
+                        // eprintln!("Error saving default config: {}", e);
                     }
                     return default_config;
                 }
@@ -200,15 +200,15 @@ pub fn load_or_create_config() -> Config {
         } else {
             // ファイルが存在しない場合はデフォルト設定で作成
             let default_config = Config::default();
-            if let Err(e) = save_config(&default_config) {
-                eprintln!("Error saving default config: {}", e);
+            if let Err(_e) = save_config(&default_config) {
+                // eprintln!("Error saving default config: {}", e);
             }
-            eprintln!("Created default config at {:?}", config_path);
+            // eprintln!("Created default config at {:?}", config_path);
             return default_config;
         }
     }
     // コンフィグパスが取得できない場合もデフォルト設定を返す
-    eprintln!("Could not get config path, using default config.");
+    // eprintln!("Could not get config path, using default config.");
     Config::default()
 }
 
@@ -218,7 +218,7 @@ pub fn save_config(config: &Config) -> io::Result<()> {
         let yaml_content = serde_yaml::to_string(config)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to serialize config: {}", e)))?;
         fs::write(&config_path, yaml_content)?;
-        eprintln!("Config saved to {:?}", config_path);
+        // eprintln!("Config saved to {:?}", config_path);
         Ok(())
     } else {
         Err(io::Error::new(io::ErrorKind::Other, "Could not determine config path for saving."))

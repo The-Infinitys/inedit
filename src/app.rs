@@ -3,16 +3,16 @@ pub mod cursor;
 pub mod editor;
 pub mod features;
 pub mod msg;
+pub use crate::app::features::syntax::Highlighter;
+pub use crate::components::popup::{ExitPopupOption, ExitPopupResult, ExitPopupState};
+pub use crate::config::{Config, load_or_create_config, save_config};
+use crate::{emsg, msg};
 use editor::Editor;
 use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
-use crate::{emsg, msg};
-pub use crate::components::popup::{ExitPopupState, ExitPopupResult, ExitPopupOption};
-pub use crate::app::features::syntax::Highlighter;
-pub use crate::config::{Config, load_or_create_config, save_config}; // Config関連をインポート
+use std::time::{Duration, Instant}; // Config関連をインポート
 
 /// UIに表示されるメッセージの種類を定義します。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,11 +32,11 @@ pub enum LineStatus {
 /// アプリケーションのイベント処理結果を定義します。
 #[derive(Debug, PartialEq, Eq)]
 pub enum AppControlFlow {
-    Continue,        // アプリケーションを通常通り続行
-    Exit,            // アプリケーションを終了
-    TriggerSaveAndExit, // 保存操作を行い、その後終了
+    Continue,              // アプリケーションを通常通り続行
+    Exit,                  // アプリケーションを終了
+    TriggerSaveAndExit,    // 保存操作を行い、その後終了
     TriggerDiscardAndExit, // 変更を破棄し、その後終了
-    ShowExitPopup,   // 終了ポップアップを表示し、ユーザーの入力を待つ
+    ShowExitPopup,         // 終了ポップアップを表示し、ユーザーの入力を待つ
 }
 
 /// アプリケーション全体の状態を管理します。
@@ -63,7 +63,6 @@ impl Default for App {
         // コンフィグからテーマを初期設定
         highlighter.set_theme(&config.color_theme);
 
-
         Self {
             editor: Editor::new(String::new()),
             target_path: None,
@@ -87,18 +86,20 @@ impl Drop for App {
         if let Some(path) = &self.temp_path {
             if path.exists() {
                 if let Err(e) = fs::remove_file(path) {
-                    eprintln!(
+                    emsg!(
+                        self,
                         "一時ファイル {:?} の削除中にエラーが発生しました: {}",
-                        path, e
+                        path,
+                        e
                     );
                 } else {
-                    eprintln!("一時ファイル {:?} を削除しました。", path);
+                    msg!(self, "一時ファイル {:?} を削除しました。", path);
                 }
             }
         }
         // アプリケーション終了時に設定を保存
         if let Err(e) = save_config(&self.config) {
-            eprintln!("Error saving config on exit: {}", e);
+            emsg!(self, "Error saving config on exit: {}", e);
         }
     }
 }
@@ -266,10 +267,18 @@ impl App {
                 "ファイルパスが指定されていません。空のバッファ（プレーンテキストモード）で開始します。一時ファイルは作成されません。"
             );
         }
-        
+
         // ファイル内容とパスに基づいてシンタックスを決定
-        let first_lines: String = app.editor.buffer.lines().take(5).collect::<Vec<&str>>().join("\n");
-        let syntax = app.highlighter.get_syntax_for_file(app.target_path.as_deref(), &first_lines);
+        let first_lines: String = app
+            .editor
+            .buffer
+            .lines()
+            .take(5)
+            .collect::<Vec<&str>>()
+            .join("\n");
+        let syntax = app
+            .highlighter
+            .get_syntax_for_file(app.target_path.as_deref(), &first_lines);
         app.current_syntax_name = syntax.name.clone();
         msg!(app, "言語: {}", app.current_syntax_name);
 
@@ -344,7 +353,9 @@ impl App {
         let now = Instant::now();
         self.messages
             .iter()
-            .filter(|(_, _, timestamp)| now.duration_since(*timestamp) < Duration::from_secs(MESSAGE_LIFETIME_SECS))
+            .filter(|(_, _, timestamp)| {
+                now.duration_since(*timestamp) < Duration::from_secs(MESSAGE_LIFETIME_SECS)
+            })
             .count() as u16
     }
 
@@ -361,7 +372,10 @@ impl App {
     }
 
     /// 終了ポップアップのキーイベントを処理します。
-    pub fn handle_exit_popup_key(&mut self, key_event: &crossterm::event::KeyEvent) -> ExitPopupResult {
+    pub fn handle_exit_popup_key(
+        &mut self,
+        key_event: &crossterm::event::KeyEvent,
+    ) -> ExitPopupResult {
         if let Some(state) = &mut self.exit_popup_state {
             match key_event.code {
                 crossterm::event::KeyCode::Up => {
@@ -389,7 +403,8 @@ impl App {
                     self.exit_popup_state = None;
                     ExitPopupResult::DiscardAndExit
                 }
-                crossterm::event::KeyCode::Char('c') | crossterm::event::KeyCode::Char('C')
+                crossterm::event::KeyCode::Char('c')
+                | crossterm::event::KeyCode::Char('C')
                 | crossterm::event::KeyCode::Esc => {
                     self.exit_popup_state = None;
                     ExitPopupResult::Cancel
