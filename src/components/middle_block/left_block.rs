@@ -38,12 +38,11 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
     // ビューポートの先頭 visual line が属する論理行番号を計算
     let mut logical_line_counter = 1;
     if start > 0 {
-        let mut seen_buf_idx = std::collections::HashSet::new();
-        for (buf_idx, _, _) in &visual_lines[..start] {
-            if seen_buf_idx.insert(*buf_idx) {
-                logical_line_counter += 1;
-            }
-        }
+        // startまでのvisual_linesでwrap_idx==0の数を数える
+        logical_line_counter += visual_lines[..start]
+            .iter()
+            .filter(|(_, wrap_idx, _)| *wrap_idx == 0)
+            .count();
     }
     // 折返し1行目ごとに論理行番号をインクリメントして表示し、折返し2行目以降は空白にする
     for (buf_idx, wrap_idx, _line_str) in visible_lines.iter() {

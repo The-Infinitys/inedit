@@ -98,6 +98,9 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
     // 折返し表示モードの設定
     if app.word_wrap_enabled {
         paragraph = paragraph.wrap(Wrap { trim: false });
+    } else {
+        // 折返し無効時はx方向スクロールを有効化
+        paragraph = paragraph.scroll((0, app.editor.scroll_offset_x as u16));
     }
     f.render_widget(paragraph, area);
     // カーソル描画
