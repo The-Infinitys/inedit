@@ -11,7 +11,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use crate::{emsg, msg};
 pub use crate::components::popup::{ExitPopupState, ExitPopupResult, ExitPopupOption};
-pub use crate::app::features::syntax::Highlighter; // Highlighterをpubにする
+pub use crate::app::features::syntax::Highlighter;
+pub use crate::config::{Config, load_or_create_config, save_config}; // Config関連をインポート
 
 /// UIに表示されるメッセージの種類を定義します。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,11 +32,11 @@ pub enum LineStatus {
 /// アプリケーションのイベント処理結果を定義します。
 #[derive(Debug, PartialEq, Eq)]
 pub enum AppControlFlow {
-    Continue,
-    Exit,
-    TriggerSaveAndExit,
-    TriggerDiscardAndExit,
-    ShowExitPopup,
+    Continue,        // アプリケーションを通常通り続行
+    Exit,            // アプリケーションを終了
+    TriggerSaveAndExit, // 保存操作を行い、その後終了
+    TriggerDiscardAndExit, // 変更を破棄し、その後終了
+    ShowExitPopup,   // 終了ポップアップを表示し、ユーザーの入力を待つ
 }
 
 /// アプリケーション全体の状態を管理します。
@@ -49,12 +50,20 @@ pub struct App {
     pub word_wrap_enabled: bool,
     pub line_statuses: Vec<LineStatus>,
     pub exit_popup_state: Option<ExitPopupState>,
-    pub highlighter: Highlighter, // 追加: シンタックスハイライター
-    pub current_syntax_name: String, // 追加: 現在の言語シンタックス名
+    pub highlighter: Highlighter,
+    pub current_syntax_name: String,
+    pub config: Config, // 追加: アプリケーションの設定
 }
 
 impl Default for App {
     fn default() -> Self {
+        // configを先にロードしておく
+        let config = load_or_create_config();
+        let mut highlighter = Highlighter::new();
+        // コンフィグからテーマを初期設定
+        highlighter.set_theme(&config.color_theme);
+
+
         Self {
             editor: Editor::new(String::new()),
             target_path: None,
@@ -65,8 +74,9 @@ impl Default for App {
             word_wrap_enabled: true,
             line_statuses: Vec::new(),
             exit_popup_state: None,
-            highlighter: Highlighter::new(), // 初期化
-            current_syntax_name: "Plain Text".to_string(), // デフォルト
+            highlighter, // 初期化済みHighlighterを使用
+            current_syntax_name: "Plain Text".to_string(),
+            config, // 初期化済みconfigを使用
         }
     }
 }
@@ -86,13 +96,17 @@ impl Drop for App {
                 }
             }
         }
+        // アプリケーション終了時に設定を保存
+        if let Err(e) = save_config(&self.config) {
+            eprintln!("Error saving config on exit: {}", e);
+        }
     }
 }
 
 impl App {
     /// アプリケーションを初期化します。コマンドライン引数からファイルパスを読み込みます。
     pub fn init() -> Self {
-        let mut app = Self::default();
+        let mut app = Self::default(); // default()でconfigとhighlighterが初期化される
 
         let args: Vec<String> = env::args().collect();
         let file_path_str_opt = args.get(1);
@@ -384,6 +398,16 @@ impl App {
             }
         } else {
             ExitPopupResult::None
+        }
+    }
+
+    /// Highlighterのテーマを変更します。
+    pub fn set_highlighter_theme(&mut self, theme_name: &str) {
+        if self.highlighter.set_theme(theme_name) {
+            self.config.color_theme = theme_name.to_string(); // Configも更新
+            msg!(self, "テーマを '{}' に変更しました。", theme_name);
+        } else {
+            emsg!(self, "テーマ '{}' は見つかりませんでした。", theme_name);
         }
     }
 }

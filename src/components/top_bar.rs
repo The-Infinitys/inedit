@@ -1,26 +1,39 @@
-// src/components/top_bar.rs
-
-use crate::app::App;
 use ratatui::{
     Frame,
-    layout::Rect,
-    style::{Modifier, Style},
+    layout::{Alignment, Rect},
+    style::{Color, Style, Modifier},
     text::Line,
     widgets::{Block, Borders, Paragraph},
-}; // App構造体を使用するためにインポート
+};
+use crate::app::App; // App構造体を使用するためにインポート
 
-/// Top Barを描画します。中央寄せでタイトルを表示します。
+/// Top Bar を描画します。ファイル名、言語、変更状態などを表示します。
 pub fn render_top_bar(f: &mut Frame, area: Rect, app: &App) {
-    // タイトルを決定
-    let title = if let Some(path) = &app.target_path {
-        format!("{} - InEdit", path.display()) // ファイルパスがあればそれを表示
-    } else {
-        "Untitled - InEdit".to_string() // なければ「Untitled」
-    };
+    let filename = app.target_path
+        .as_ref()
+        .and_then(|p| p.file_name())
+        .and_then(|s| s.to_str())
+        .unwrap_or("untitled");
 
-    let paragraph = Paragraph::new(Line::from(title).centered())
-        .block(Block::default().borders(Borders::NONE)) // 下線で区切る
-        .style(Style::default().add_modifier(Modifier::BOLD)); // 太字にする
+    let modified_indicator = if app.has_unsaved_changes() { "*" } else { "" };
+
+    let current_language = &app.current_syntax_name;
+    let current_theme = &app.highlighter.current_theme_name;
+
+
+    let text_content = format!(
+        " {} {}{} | Language: {} | Theme: {} ",
+        app.editor.search_query, // 検索クエリがあれば表示
+        filename,
+        modified_indicator,
+        current_language,
+        current_theme
+    );
+
+    let paragraph = Paragraph::new(Line::from(text_content))
+        .block(Block::default().borders(Borders::BOTTOM)) // 下側に境界線
+        .alignment(Alignment::Left) // 左寄せ
+        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)); // 明るい青色
 
     f.render_widget(paragraph, area);
 }

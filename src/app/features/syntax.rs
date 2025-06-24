@@ -1,17 +1,17 @@
 //! シンタックスハイライト機能と、言語の自動判別ロジックを提供します。
-use ratatui::style::{Color, Modifier, Style};
 use std::{collections::HashMap, path::Path};
 use syntect::{
-    easy::HighlightLines,
-    highlighting::{FontStyle, Style as SyntectStyle, Theme, ThemeSet},
     parsing::{SyntaxReference, SyntaxSet},
-}; // ratatuiのスタイルをインポート
+    highlighting::{ThemeSet, Style as SyntectStyle, Theme, FontStyle, Color as SyntectColor},
+    easy::HighlightLines,
+};
+use ratatui::style::{Color, Modifier, Style};
 
 /// シンタックスハイライト処理に必要なデータを保持します。
 pub struct Highlighter {
     pub syntax_set: SyntaxSet,
     pub theme_set: ThemeSet,
-    pub themes: HashMap<String, Theme>,
+    themes: HashMap<String, Theme>,
     pub current_theme_name: String,
 }
 
@@ -19,13 +19,12 @@ impl Default for Highlighter {
     fn default() -> Self {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
-        let current_theme_name = "InspiredGitHub".to_string(); // デフォルトテーマ
+        let current_theme_name = "InspiredGitHub".to_string();
 
         let mut themes = HashMap::new();
-        themes.insert(
-            current_theme_name.clone(),
-            theme_set.themes[&current_theme_name].clone(),
-        );
+        for (name, theme) in theme_set.themes.iter() {
+            themes.insert(name.clone(), theme.clone());
+        }
 
         Highlighter {
             syntax_set,
@@ -37,7 +36,7 @@ impl Default for Highlighter {
 }
 
 impl Highlighter {
-    /// デフォルトのテーマを使用してハイライターを初期化します。
+    /// 新しいHighlighterインスタンスを作成します。
     pub fn new() -> Self {
         Self::default()
     }
@@ -51,11 +50,9 @@ impl Highlighter {
                 }
             }
         }
-        // Shebang (例: #!/bin/bash) から言語を推測
         if let Some(syntax) = self.syntax_set.find_syntax_by_first_line(first_lines) {
             return syntax;
         }
-        // デフォルトのプレーンテキストを返す
         self.syntax_set.find_syntax_plain_text()
     }
 
@@ -63,7 +60,7 @@ impl Highlighter {
     pub fn get_current_theme(&self) -> &Theme {
         self.themes
             .get(&self.current_theme_name)
-            .unwrap_or_else(|| &self.theme_set.themes["InspiredGitHub"]) // フォールバック
+            .unwrap_or_else(|| &self.theme_set.themes["InspiredGitHub"])
     }
 
     /// 指定された行に対してシンタックスハイライトを適用し、`ratatui::style::Style`のVecを返します。
@@ -75,10 +72,7 @@ impl Highlighter {
         let mut highlighter = HighlightLines::new(syntax, self.get_current_theme());
         highlighter
             .highlight_line(line, &self.syntax_set)
-            .unwrap_or_else(|_| {
-                // エラー時は単一のデフォルトスタイルを返す
-                vec![(SyntectStyle::default(), line)]
-            })
+            .unwrap_or_else(|_| vec![(SyntectStyle::default(), line)])
     }
 
     /// `syntect`のスタイルを`ratatui`のスタイルに変換します。
@@ -99,9 +93,30 @@ impl Highlighter {
         }
         style
     }
+
+    /// テーマを切り替えます。成功した場合はtrueを返します。
+    pub fn set_theme(&mut self, theme_name: &str) -> bool {
+        if self.themes.contains_key(theme_name) {
+            self.current_theme_name = theme_name.to_string();
+            true
+        } else if let Some(theme) = self.theme_set.themes.get(theme_name) {
+            self.themes.insert(theme_name.to_string(), theme.clone());
+            self.current_theme_name = theme_name.to_string();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 利用可能なテーマ名のリストを返します。
+    pub fn list_themes(&self) -> Vec<String> {
+        let mut themes: Vec<String> = self.theme_set.themes.keys().cloned().collect();
+        themes.sort_unstable();
+        themes
+    }
 }
 
 /// `syntect`の`Color`を`ratatui`の`Color`に変換します。
-fn convert_syntect_color(c: syntect::highlighting::Color) -> Color {
+fn convert_syntect_color(c: SyntectColor) -> Color {
     Color::Rgb(c.r, c.g, c.b)
 }
