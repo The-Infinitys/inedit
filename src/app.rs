@@ -78,7 +78,7 @@ impl Default for App {
             clipboard: None,
             messages: Vec::new(),
             original_buffer: String::new(),
-            word_wrap_enabled: true,
+            word_wrap_enabled: false,
             line_statuses: Vec::new(),
             exit_popup_state: None,
             highlighter, // 初期化済みHighlighterを使用

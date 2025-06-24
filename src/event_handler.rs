@@ -173,13 +173,14 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
         }
         // 折り返し表示トグル
         else if bindings.toggle_word_wrap.matches(key) {
-            app.word_wrap_enabled = !app.word_wrap_enabled;
-            app.calculate_diff_status();
-            if app.word_wrap_enabled {
-                msg!(app, "折り返し表示モード: ON");
-            } else {
-                msg!(app, "折り返し表示モード: OFF");
-            }
+            msg!(app,"現在、この機能は無効化されています。");
+            // app.word_wrap_enabled = !app.word_wrap_enabled;
+            // app.calculate_diff_status();
+            // if app.word_wrap_enabled {
+            //     msg!(app, "折り返し表示モード: ON");
+            // } else {
+            //     msg!(app, "折り返し表示モード: OFF");
+            // }
         }
         // 改行
         else if bindings.insert_newline.matches(key) {
