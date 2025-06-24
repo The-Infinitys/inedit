@@ -87,7 +87,12 @@ impl KeyEventConfig {
             return false;
         }
 
-        // KeyModifiersの比較
+        // --- 修正: self.modifiersが空なら、修飾キー問わずマッチする ---
+        if self.modifiers.is_empty() {
+            return true;
+        }
+
+        // KeyModifiersの比較（self.modifiersが全てevent_modifiers_vecに含まれていればOK）
         let mut event_modifiers_vec = Vec::new();
         if key_event.modifiers.contains(KeyModifiers::CONTROL) {
             event_modifiers_vec.push("Control");
@@ -99,12 +104,7 @@ impl KeyEventConfig {
             event_modifiers_vec.push("Shift");
         }
 
-        // Modifiersの数と内容が完全に一致するか確認
-        self.modifiers.len() == event_modifiers_vec.len()
-            && self
-                .modifiers
-                .iter()
-                .all(|m| event_modifiers_vec.contains(&m.as_str()))
+        self.modifiers.iter().all(|m| event_modifiers_vec.contains(&m.as_str()))
     }
 }
 

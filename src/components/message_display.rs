@@ -43,7 +43,7 @@ pub fn render_message_display(f: &mut Frame, area: Rect, app: &App) {
     }
 
     let block = Block::default()
-        .borders(Borders::ALL) // 境界線
+        .borders(Borders::NONE) // 境界線
         .style(Style::default().bg(Color::DarkGray)); // 暗い背景色で通知感を出す
 
     let paragraph = Paragraph::new(visible_messages)

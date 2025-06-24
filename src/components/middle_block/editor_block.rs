@@ -32,31 +32,66 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
         // syntectによるハイライト結果を取得
         let highlighted_segments = app.highlighter.highlight_line(line_str, syntax);
 
+        // 選択範囲のバイトオフセットを計算
+        let (sel_start_byte, sel_end_byte) = if let Some((sel_start, sel_end)) = selection_range {
+            (sel_start, sel_end)
+        } else {
+            (usize::MAX, usize::MAX) // 選択なし
+        };
+
+        // この行のグローバルバイト範囲
+        let global_line_start_byte_offset = app
+            .editor
+            .buffer
+            .lines()
+            .take(line_idx)
+            .map(|l| l.len() + 1) // +1は改行コードのバイトオフセット
+            .sum::<usize>();
+        let global_line_end_byte_offset = global_line_start_byte_offset + line_str.len();
+
+        // この行が選択範囲と重なっているか
+        let line_selected = sel_start_byte < global_line_end_byte_offset && sel_end_byte > global_line_start_byte_offset;
+
         for (syntect_style, text) in highlighted_segments {
-            let mut base_style = super::super::super::app::features::syntax::Highlighter::convert_syntect_style_to_ratatui_style(syntect_style);
+            let base_style = super::super::super::app::features::syntax::Highlighter::convert_syntect_style_to_ratatui_style(syntect_style);
 
-            // 選択範囲のハイライトを上書き
-            if let Some((sel_start_byte, sel_end_byte)) = selection_range {
-                let global_line_start_byte_offset = app
-                    .editor
-                    .buffer
-                    .lines()
-                    .take(line_idx)
-                    .map(|l| l.len() + 1) // +1は改行コードのバイトオフセット
-                    .sum::<usize>();
+            let segment_global_start_offset = global_line_start_byte_offset + current_byte_offset_in_line;
+            let segment_global_end_offset = segment_global_start_offset + text.len();
 
-                let segment_global_start_offset =
-                    global_line_start_byte_offset + current_byte_offset_in_line;
-                let segment_global_end_offset = segment_global_start_offset + text.len(); // text.len()はバイト長
+            // このセグメントが選択範囲と重なる場合のみ色を変える
+            if line_selected {
+                // セグメント内で選択範囲と重なる部分だけ色を変える
+                let seg_sel_start = sel_start_byte.max(segment_global_start_offset);
+                let seg_sel_end = sel_end_byte.min(segment_global_end_offset);
 
-                // セグメントが選択範囲と重なるかチェック
-                if segment_global_start_offset < sel_end_byte
-                    && segment_global_end_offset > sel_start_byte
-                {
-                    base_style = base_style.bg(Color::Rgb(50, 50, 100)); // 選択色
+                if seg_sel_start < seg_sel_end {
+                    // セグメント内で選択範囲が部分的に重なる場合
+                    let rel_sel_start = seg_sel_start - segment_global_start_offset;
+                    let rel_sel_end = seg_sel_end - segment_global_start_offset;
+
+                    // 3分割: [非選択][選択][非選択]
+                    // let text_bytes = text.as_bytes();
+                    let left = &text[..rel_sel_start];
+                    let mid = &text[rel_sel_start..rel_sel_end];
+                    let right = &text[rel_sel_end..];
+
+                    if !left.is_empty() {
+                        spans.push(Span::styled(left.to_string(), base_style));
+                    }
+                    if !mid.is_empty() {
+                        spans.push(Span::styled(mid.to_string(), base_style.bg(Color::Rgb(50, 50, 100))));
+                    }
+                    if !right.is_empty() {
+                        spans.push(Span::styled(right.to_string(), base_style));
+                    }
+                } else {
+                    // セグメント全体が非選択
+                    spans.push(Span::styled(text.to_string(), base_style));
                 }
+            } else {
+                // 選択範囲外
+                spans.push(Span::styled(text.to_string(), base_style));
             }
-            spans.push(Span::styled(text.to_string(), base_style));
             current_byte_offset_in_line += text.len();
         }
         lines_for_paragraph.push(Line::from(spans));

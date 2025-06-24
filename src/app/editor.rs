@@ -305,11 +305,10 @@ impl Editor {
 
     /// バッファの内容全体を選択します。
     pub fn select_all(&mut self) {
-        // ドキュメントの先頭にカーソルを移動し、選択を開始
-        self.move_cursor_to_document_start(true);
-        // ドキュメントの末尾にカーソルを移動して選択を完了
-        // set_cursor_position が u16::MAX を適切に処理することを期待
-        self.move_cursor_to_document_end(true);
+        // 1. 先頭にカーソルを移動し、選択開始
+        self.set_cursor_position(0, 0, false); // 選択解除して先頭へ
+        // 2. 末尾にカーソルを移動し、選択を拡張
+        self.move_cursor_to_document_end(true); // extend_selection = true で末尾まで選択
     }
 
     /// 選択された範囲のテキストをコピーします。

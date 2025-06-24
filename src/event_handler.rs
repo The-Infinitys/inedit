@@ -11,21 +11,19 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
     if key.kind == KeyEventKind::Press {
         let extend_selection = key.modifiers.contains(KeyModifiers::SHIFT);
 
-        // 終了ポップアップが表示されている場合は、ポップアップのキーイベントを優先的に処理
+        // --- ポップアップ表示中の処理 ---
         if let Some(popup_state) = app.exit_popup_state.as_mut() {
-            // --- 入力モード時の処理 ---
+            // 入力モード時
             if popup_state.input_mode {
                 match key.code {
                     KeyCode::Enter => {
                         if !popup_state.input_text.is_empty() {
-                            app.target_path =
-                                Some(std::path::PathBuf::from(&popup_state.input_text));
+                            app.target_path = Some(std::path::PathBuf::from(&popup_state.input_text));
                             popup_state.input_mode = false;
-                            popup_state.input_text.clear(); // Clear input after use
-                            app.exit_popup_state = None; // Hide popup
+                            popup_state.input_text.clear();
+                            app.exit_popup_state = None;
                             return Ok(AppControlFlow::TriggerSaveAndExit);
                         } else {
-                            // If Enter is pressed with empty input, just return to popup main state
                             popup_state.input_mode = false;
                             msg!(app, "ファイルパスが空です。");
                             return Ok(AppControlFlow::ShowExitPopup);
@@ -49,37 +47,35 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
                     }
                     _ => {}
                 }
-                return Ok(AppControlFlow::ShowExitPopup); // 入力モード中はポップアップを表示し続ける
+                return Ok(AppControlFlow::ShowExitPopup);
             }
 
-            // --- 通常のポップアップ操作 ---
-            // ここでpopup_stateの可変参照はもう使わないので、再度appを可変参照できる
-            let popup_result = app.handle_exit_popup_key(key); // keyを渡す
+            // 通常のポップアップ操作
+            let popup_result = app.handle_exit_popup_key(key);
             match popup_result {
                 ExitPopupResult::SaveAndExit => {
                     if app.target_path.is_none() {
-                        // 新規ファイルで保存する場合、パス入力モードへ
                         if let Some(popup_state) = app.exit_popup_state.as_mut() {
+                            popup_state.selected_option = crate::app::ExitPopupOption::SaveAndExit;
                             popup_state.input_mode = true;
-                            popup_state.input_text.clear(); // 新規保存なのでテキストをクリア
+                            popup_state.input_text.clear();
                             return Ok(AppControlFlow::ShowExitPopup);
                         }
                     }
-                    // target_pathがある場合はそのまま保存して終了
                     return Ok(AppControlFlow::TriggerSaveAndExit);
                 }
                 ExitPopupResult::DiscardAndExit => {
                     return Ok(AppControlFlow::TriggerDiscardAndExit);
                 }
-                ExitPopupResult::Cancel => return Ok(AppControlFlow::Continue), // ポップアップが閉じて続行
-                ExitPopupResult::None => return Ok(AppControlFlow::ShowExitPopup), // ポップアップ内で選択中
+                ExitPopupResult::Cancel => return Ok(AppControlFlow::Continue),
+                ExitPopupResult::None => return Ok(AppControlFlow::ShowExitPopup),
             }
         }
 
-        // ポップアップが表示されていない場合の通常のキーイベント処理
+        // --- 通常のキーイベント処理 ---
         let bindings = &app.config.key_bindings;
 
-        // 終了コマンドのチェック
+        // 終了
         if bindings.exit_1.matches(key)
             || bindings.exit_2.matches(key)
             || bindings.exit_3.matches(key)
@@ -95,16 +91,15 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
         // ファイル保存
         else if bindings.save_file.matches(key) {
             if app.target_path.is_none() {
-                // 新規ファイルの場合、保存パス入力モードへ
                 if app.exit_popup_state.is_none() {
-                    app.exit_popup_state = Some(Default::default()); // ポップアップを初期化
+                    app.exit_popup_state = Some(Default::default());
                 }
                 if let Some(popup_state) = app.exit_popup_state.as_mut() {
-                    popup_state.selected_option = crate::app::ExitPopupOption::SaveAndExit; // デフォルトでSaveを選択
-                    popup_state.input_mode = true; // 入力モードを有効化
-                    popup_state.input_text.clear(); // 入力フィールドをクリア
+                    popup_state.selected_option = crate::app::ExitPopupOption::SaveAndExit;
+                    popup_state.input_mode = true;
+                    popup_state.input_text.clear();
                 }
-                return Ok(AppControlFlow::ShowExitPopup); // ポップアップを表示して入力待ち
+                return Ok(AppControlFlow::ShowExitPopup);
             }
             match app.save_current_file() {
                 Ok(_) => msg!(app, "ファイルが正常に保存されました。"),
@@ -132,7 +127,6 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
         // ペースト
         else if bindings.paste.matches(key) {
             if let Some(text_to_paste) = app.clipboard.clone() {
-                // .clone() で所有権を移動させずに参照を使う
                 app.editor.paste_text(&text_to_paste);
                 app.calculate_diff_status();
                 msg!(app, "クリップボードの内容をペーストしました。");
@@ -162,8 +156,8 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
         }
         // タブ
         else if bindings.insert_tab.matches(key) {
-            app.editor.paste_text("    "); // paste_textは内部でcalculate_diff_statusを呼び出す
-            app.calculate_diff_status(); // Tabでpaste_textを呼んだ場合も明示的にdiff再計算
+            app.editor.paste_text("    ");
+            app.calculate_diff_status();
         }
         // 前の文字を削除
         else if bindings.delete_previous_char.matches(key) {
@@ -175,7 +169,7 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
             app.editor.delete_current_char();
             app.calculate_diff_status();
         }
-        // カーソル移動 (Shiftキーの状態を考慮)
+        // カーソル移動（Shift対応）
         else if bindings.move_left.matches(key) {
             app.editor.previous_char(extend_selection);
         } else if bindings.move_right.matches(key) {
