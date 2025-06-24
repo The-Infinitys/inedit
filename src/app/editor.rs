@@ -785,13 +785,16 @@ impl Editor {
         self.set_cursor_position(x, y, false); // 検索結果に移動（選択はクリア）
     }
 
-    pub fn copy_selection_to_clipboard(&self) {
+    pub fn copy_selection_to_clipboard(&self) -> Option<String> {
         if let Some((start, end)) = self.get_selection_range() {
-            let text = &self.buffer[start..end];
+            let text = self.buffer[start..end].to_string();
             let mut clipboard = Clipboard::new().ok();
             if let Some(ref mut cb) = clipboard {
-                let _ = cb.set_text(text.to_string());
+                let _ = cb.set_text(text.clone());
             }
+            Some(text)
+        } else {
+            None
         }
     }
 
