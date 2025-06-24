@@ -13,6 +13,7 @@ pub struct App {
     pub editor: Editor,
     pub target_path: Option<PathBuf>, // 編集対象の元のファイルのパス
     pub temp_path: Option<PathBuf>,   // 編集中の内容を保存する一時ファイルのパス
+    pub clipboard: Option<String>,    // アプリケーション内のクリップボードデータ
 }
 
 impl Default for App {
@@ -22,6 +23,7 @@ impl Default for App {
             editor: Editor::new(String::new()),
             target_path: None,
             temp_path: None, // temp_pathも初期化
+            clipboard: None, // クリップボードも初期化
         }
     }
 }
@@ -129,7 +131,7 @@ impl App {
             } else {
                 eprintln!(
                     "元のファイルが存在しません: {:?}。新しいファイルバッファと一時ファイルを作成します。",
-                    original_path
+                    file_path_str
                 );
                 // 存在しないパスでも、そのパスを新しいファイルとして扱い、空の一時ファイルを作成
                 if let Err(e) = fs::write(&temp_path, "") {
