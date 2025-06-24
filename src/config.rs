@@ -237,8 +237,7 @@ pub fn load_or_create_config() -> Config {
 pub fn save_config(config: &Config) -> io::Result<()> {
     if let Some(config_path) = get_config_path() {
         let yaml_content = serde_yaml::to_string(config).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
+            io::Error::other(
                 format!("Failed to serialize config: {}", e),
             )
         })?;
@@ -246,8 +245,7 @@ pub fn save_config(config: &Config) -> io::Result<()> {
         // eprintln!("Config saved to {:?}", config_path);
         Ok(())
     } else {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
+        Err(io::Error::other(
             "Could not determine config path for saving.",
         ))
     }

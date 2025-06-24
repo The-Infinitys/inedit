@@ -74,5 +74,5 @@ fn gruvbox_dark_theme() -> (String, Theme) {
     )
 }
 pub fn themes() -> Vec<(String, Theme)> {
-    return vec![gruvbox_dark_theme(), midnight_theme()];
+    vec![gruvbox_dark_theme(), midnight_theme()]
 }
