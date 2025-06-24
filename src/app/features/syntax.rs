@@ -19,9 +19,10 @@ impl Default for Highlighter {
     fn default() -> Self {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
-        let current_theme_name = "InspiredGitHub".to_string();
+        let current_theme_name = "InspiredGitHub".to_string(); // デフォルトテーマ
 
         let mut themes = HashMap::new();
+        // ThemeSetから全てのテーマをHashMapにコピーして保持
         for (name, theme) in theme_set.themes.iter() {
             themes.insert(name.clone(), theme.clone());
         }
@@ -50,29 +51,31 @@ impl Highlighter {
                 }
             }
         }
+        // Shebang (例: #!/bin/bash) から言語を推測
         if let Some(syntax) = self.syntax_set.find_syntax_by_first_line(first_lines) {
             return syntax;
         }
+        // デフォルトのプレーンテキストを返す
         self.syntax_set.find_syntax_plain_text()
     }
 
     /// 現在のテーマを取得します。
     pub fn get_current_theme(&self) -> &Theme {
-        self.themes
-            .get(&self.current_theme_name)
-            .unwrap_or_else(|| &self.theme_set.themes["InspiredGitHub"])
+        self.themes.get(&self.current_theme_name)
+            .unwrap_or_else(|| &self.theme_set.themes["InspiredGitHub"]) // フォールバック
     }
 
-    /// 指定された行に対してシンタックスハイライトを適用し、`ratatui::style::Style`のVecを返します。
+    /// 指定された行に対してシンタックスハイライトを適用し、`syntect`のスタイルとテキストのペアのVecを返します。
     pub fn highlight_line<'a>(
         &self,
         line: &'a str,
         syntax: &SyntaxReference,
     ) -> Vec<(SyntectStyle, &'a str)> {
         let mut highlighter = HighlightLines::new(syntax, self.get_current_theme());
-        highlighter
-            .highlight_line(line, &self.syntax_set)
-            .unwrap_or_else(|_| vec![(SyntectStyle::default(), line)])
+        highlighter.highlight_line(line, &self.syntax_set)
+            .unwrap_or_else(|_| {
+                vec![(SyntectStyle::default(), line)]
+            })
     }
 
     /// `syntect`のスタイルを`ratatui`のスタイルに変換します。
@@ -99,12 +102,15 @@ impl Highlighter {
         if self.themes.contains_key(theme_name) {
             self.current_theme_name = theme_name.to_string();
             true
-        } else if let Some(theme) = self.theme_set.themes.get(theme_name) {
-            self.themes.insert(theme_name.to_string(), theme.clone());
-            self.current_theme_name = theme_name.to_string();
-            true
         } else {
-            false
+            // ThemeSetからロードを試みる
+            if let Some(theme) = self.theme_set.themes.get(theme_name) {
+                self.themes.insert(theme_name.to_string(), theme.clone());
+                self.current_theme_name = theme_name.to_string();
+                true
+            } else {
+                false
+            }
         }
     }
 
@@ -113,6 +119,20 @@ impl Highlighter {
         let mut themes: Vec<String> = self.theme_set.themes.keys().cloned().collect();
         themes.sort_unstable();
         themes
+    }
+
+    /// 現在のテーマの背景色を`ratatui::style::Color`で取得します。
+    pub fn get_background_color(&self) -> Color {
+        let theme = self.get_current_theme();
+        theme.settings.background
+            .map_or(Color::Black, convert_syntect_color)
+    }
+
+    /// 現在のテーマの前景色（基本テキスト色）を`ratatui::style::Color`で取得します。
+    pub fn get_foreground_color(&self) -> Color {
+        let theme = self.get_current_theme();
+        theme.settings.foreground
+            .map_or(Color::White, convert_syntect_color)
     }
 }
 
