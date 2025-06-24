@@ -79,10 +79,10 @@ pub fn render_exit_popup(f: &mut Frame, area: Rect, state: &ExitPopupState) {
         .block(block)
         .alignment(Alignment::Center);
 
-    // Calculate the area for the popup to be centered
-    // Ensure the popup width and height are reasonable given the content
-    let popup_width = 60; // Fixed width for the popup
-    let popup_height = 9; // Number of lines in the text + block borders (7 lines content + 2 for borders)
+    // ポップアップを中央に配置するための領域を計算
+    // ポップアップの幅と高さはコンテンツとブロックのボーダーに基づいて設定
+    let popup_width = 60; // ポップアップの固定幅
+    let popup_height = 9; // テキストの行数 + ブロックのボーダー (コンテンツ7行 + ボーダー2行)
 
     let popup_area = Rect::new(
         area.width.saturating_sub(popup_width) / 2,
@@ -91,7 +91,7 @@ pub fn render_exit_popup(f: &mut Frame, area: Rect, state: &ExitPopupState) {
         popup_height,
     );
 
-    // Clear the background behind the popup
+    // ポップアップの背景をクリア
     f.render_widget(Clear, popup_area);
     f.render_widget(paragraph, popup_area);
 }

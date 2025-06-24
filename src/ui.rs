@@ -2,10 +2,13 @@
 use crate::{
     app::App,
     components::{
-        bottom_bar::render_bottom_bar, message_display::render_message_display,
+        bottom_bar::render_bottom_bar,
+        message_display::render_message_display,
         middle_block::editor_block::render_editor_block,
-        middle_block::left_block::render_left_block, middle_block::right_block::render_right_block,
+        middle_block::left_block::render_left_block,
+        middle_block::right_block::render_right_block,
         top_bar::render_top_bar,
+        popup::render_exit_popup, // 追加: ポップアップ描画関数
     },
 };
 use ratatui::{
@@ -13,8 +16,6 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
 };
 
-/// Constants for UI layout dimensions
-/// 
 /// アプリケーションのUIを描画します。
 pub fn draw_ui(f: &mut Frame, app: &mut App) {
     let size = f.area();
@@ -36,9 +37,6 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     render_top_bar(f, main_chunks[0], app);
 
     // メインエディタ領域をさらに分割 (Left Block + Editor Block + Right Block)
-    // 左ブロック (行番号と差分): 7文字固定 (例: "    1 + ")
-    // 右ブロック (スクロールバーと差分): 3文字固定 (例: " |~")
-    // エディタ本体: 残りのスペース
     let editor_area_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(
@@ -52,7 +50,7 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
         .split(main_chunks[1]); // main_chunks[1] がエディタの親領域
 
     // Middle Block の描画前にスクロールオフセットを調整
-    // エディタ本体の描画領域を adjust_viewport_offset に渡す
+    // ここで `editor_area_chunks[1]` (Editor Block の領域) を渡すのが適切です。
     app.editor.adjust_viewport_offset(editor_area_chunks[1]);
 
     // Left Block の描画
@@ -68,15 +66,13 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     render_bottom_bar(f, main_chunks[2], app);
 
     // メッセージ通知エリアを計算 (画面全体の右下)
-    const MAX_MESSAGE_HEIGHT: u16 = 5; // メッセージ表示の最大行数
-    const MESSAGE_WIDTH: u16 = 40; // メッセージ表示の幅
-    const MESSAGE_MARGIN: u16 = 1; // 画面端からのマージン
+    const MAX_MESSAGE_HEIGHT: u16 = 5;
+    const MESSAGE_WIDTH: u16 = 40;
+    const MESSAGE_MARGIN: u16 = 1;
 
-    // 表示されるメッセージの実際の行数を取得し、最大高さを適用
     let actual_message_lines = app.get_visible_message_count().min(MAX_MESSAGE_HEIGHT);
 
     let msg_area = if actual_message_lines > 0 {
-        // メッセージがある場合のみ Rect を作成
         Rect {
             x: size
                 .width
@@ -84,16 +80,20 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
                 .saturating_sub(MESSAGE_MARGIN),
             y: size
                 .height
-                .saturating_sub(actual_message_lines) // 実際のメッセージ数を使用
+                .saturating_sub(actual_message_lines)
                 .saturating_sub(MESSAGE_MARGIN),
             width: MESSAGE_WIDTH,
-            height: actual_message_lines, // 実際のメッセージ数を使用
+            height: actual_message_lines,
         }
     } else {
-        // メッセージがない場合は、Rectのheightを0にすることで描画されないようにする
         Rect::new(0, 0, 0, 0)
     };
 
     // メッセージ通知の描画
     render_message_display(f, msg_area, app);
+
+    // 終了ポップアップが表示されている場合は描画
+    if let Some(exit_popup_state) = &app.exit_popup_state {
+        render_exit_popup(f, size, exit_popup_state);
+    }
 }

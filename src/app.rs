@@ -293,16 +293,16 @@ impl App {
         self.editor.buffer != self.original_buffer
     }
 
-    /// 終了を試みます。未保存の変更がある場合はポップアップを表示します。
-    /// このメソッドはAppControlFlowを返すべきではない（イベントハンドラが直接返すため）。
-    /// 代わりに、ポップアップを表示するかどうかを設定する。
+    /// 終了を試みます。未保存の変更がある場合はポップアップを表示する状態に設定します。
+    /// イベントハンドラがこの設定を読み取り、適切な AppControlFlow を返します。
     pub fn trigger_exit_popup_if_needed(&mut self) {
         if self.has_unsaved_changes() {
-            self.exit_popup_state = Some(ExitPopupState::default()); // ポップアップを表示する
+            self.exit_popup_state = Some(ExitPopupState::default()); // ポップアップを表示する状態に設定
         }
     }
 
     /// 終了ポップアップのキーイベントを処理します。
+    /// ポップアップが表示されている場合にのみ呼び出されます。
     pub fn handle_exit_popup_key(&mut self, key_event: &crossterm::event::KeyEvent) -> ExitPopupResult {
         if let Some(state) = &mut self.exit_popup_state {
             match key_event.code {
@@ -339,7 +339,7 @@ impl App {
                 _ => ExitPopupResult::None,
             }
         } else {
-            // ポップアップが表示されていない場合は何もしない（通常はここに到達しないはずだが安全策）
+            // ここには到達しないはずだが、念のためNoneを返す
             ExitPopupResult::None
         }
     }
