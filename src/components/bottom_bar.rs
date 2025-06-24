@@ -32,7 +32,7 @@ pub fn render_bottom_bar(f: &mut Frame, area: Rect, app: &App) {
     let paragraph = Paragraph::new(Line::from(text_content))
         .block(
             Block::default()
-                .borders(Borders::TOP)
+                .borders(Borders::NONE)
                 .style(Style::default().bg(theme_bg)),
         ) // テーマの背景色を適用
         .alignment(Alignment::Right) // 右寄せ

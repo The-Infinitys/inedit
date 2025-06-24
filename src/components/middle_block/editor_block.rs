@@ -2,7 +2,7 @@ use crate::app::App;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::Color, // Modifierも利用
+    style::{Color, Stylize},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
@@ -67,8 +67,17 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
         lines_for_paragraph.push(Line::from(vec![Span::raw("")]));
     }
 
+    // テーマの背景色と前景色を取得
+    let theme_bg = app.highlighter.get_background_color();
+    let theme_fg = app.highlighter.get_foreground_color();
+
     let mut paragraph = Paragraph::new(Text::from(lines_for_paragraph))
-        .block(Block::default().borders(Borders::NONE))
+        .block(
+            Block::default()
+                .borders(Borders::NONE)
+                .bg(theme_bg)
+                .fg(theme_fg),
+        )
         .scroll((app.editor.scroll_offset_y, app.editor.scroll_offset_x));
 
     // 折り返し表示モードの設定
