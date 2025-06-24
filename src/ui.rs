@@ -2,11 +2,9 @@
 use crate::{
     app::App,
     components::{
-        bottom_bar::render_bottom_bar,
-        message_display::render_message_display,
+        bottom_bar::render_bottom_bar, message_display::render_message_display,
         middle_block::editor_block::render_editor_block,
-        middle_block::left_block::render_left_block,
-        middle_block::right_block::render_right_block,
+        middle_block::left_block::render_left_block, middle_block::right_block::render_right_block,
         top_bar::render_top_bar,
     },
 };
@@ -14,6 +12,8 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
 };
+
+/// Constants for UI layout dimensions
 
 /// アプリケーションのUIを描画します。
 pub fn draw_ui(f: &mut Frame, app: &mut App) {

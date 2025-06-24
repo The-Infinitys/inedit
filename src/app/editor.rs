@@ -4,7 +4,9 @@ use super::cursor::Cursor;
 use ratatui::layout::Rect;
 use std::fs;
 use std::io;
-use std::path::Path; // Rect を使用するためにインポート
+use std::path::Path;
+// use unicode_width::UnicodeWidthChar; // unicode-width は使用しません
+use ratatui::text::Line as RatatuiLine; // ratatui::text::Line をエイリアスでインポート
 
 /// テキストバッファとカーソルを管理し、編集操作を提供します。
 #[derive(Default)]
@@ -97,12 +99,12 @@ impl Editor {
     /// のようにループの終端を制限することで、存在しない行が表示されるのを防ぐことができます。
     pub fn adjust_viewport_offset(&mut self, viewport_area: Rect) {
         let cursor_y = self.cursor.y;
-        let cursor_x = self.cursor.x;
+        let cursor_x_logical = self.cursor.x; // 論理的な文字インデックス
         let viewport_height = viewport_area.height;
         let viewport_width = viewport_area.width;
 
-        const PADDING_Y: u16 = 3; // 垂直方向のパディングを調整
-        const PADDING_X: u16 = 5; // 水平方向のパディングを調整
+        const PADDING_Y: u16 = 3; // 垂直方向のパディング
+        const PADDING_X: u16 = 5; // 水平方向のパディング
 
         // 垂直スクロール (Y軸)
         // カーソルが上端に近づいた場合
@@ -117,22 +119,34 @@ impl Editor {
                 .saturating_add(PADDING_Y);
         }
 
-        // 水平スクロール (X軸) - 行の長さも考慮
+        // 水平スクロール (X軸) - 行の長さとUnicode幅も考慮
         let lines: Vec<&str> = self.buffer.lines().collect();
-        let current_line_len = if (cursor_y as usize) < lines.len() {
-            lines[cursor_y as usize].chars().count() as u16
+        let current_line_content = if (cursor_y as usize) < lines.len() {
+            lines[cursor_y as usize]
         } else {
-            0
+            ""
         };
 
-        if cursor_x < self.scroll_offset_x + PADDING_X {
+        // カーソルの論理X位置 (cursor_x_logical) までの部分文字列の視覚的な幅（セル数）を計算
+        let visual_cursor_x_on_line = RatatuiLine::from(
+            current_line_content
+                .chars()
+                .take(cursor_x_logical as usize)
+                .collect::<String>(),
+        )
+        .width() as u16;
+
+        // 現在の行の全幅も計算（スクロール範囲の調整用）
+        let current_line_visual_width = RatatuiLine::from(current_line_content).width() as u16;
+
+
+        if visual_cursor_x_on_line < self.scroll_offset_x + PADDING_X {
             // カーソルがビューポートの左端より左に移動した場合
-            self.scroll_offset_x = cursor_x.saturating_sub(PADDING_X);
-        } else if cursor_x >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X) {
+            self.scroll_offset_x = visual_cursor_x_on_line.saturating_sub(PADDING_X);
+        } else if visual_cursor_x_on_line >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X) {
             // カーソルがビューポートの右端より右に移動した場合
-            // 注: 右端にカーソルがある場合、その文字は見えるべきなので +1 は不要な場合があるが、
-            // ターミナルの表示幅によっては1文字分の余裕が欲しいこともあるため、ここでは簡潔に +1
-            self.scroll_offset_x = cursor_x
+            // カーソル自体を含めるため、少なくとも1セル分動かすことを考慮（正確な幅はParagraphが計算する）
+            self.scroll_offset_x = visual_cursor_x_on_line
                 .saturating_add(1)
                 .saturating_sub(viewport_width)
                 .saturating_add(PADDING_X);
@@ -148,13 +162,17 @@ impl Editor {
             self.scroll_offset_y = 0; // コンテンツがビューポートより短い場合、垂直スクロールは不要
         }
 
-        if current_line_len > viewport_width {
+        if current_line_visual_width > viewport_width {
             self.scroll_offset_x = self
                 .scroll_offset_x
-                .min(current_line_len.saturating_sub(viewport_width));
+                .min(current_line_visual_width.saturating_sub(viewport_width));
         } else {
             self.scroll_offset_x = 0; // 現在の行がビューポートより短い場合、水平スクロールは不要
         }
+
+        // スクロールオフセットは常に0以上であることを保証
+        self.scroll_offset_x = self.scroll_offset_x.max(0);
+        self.scroll_offset_y = self.scroll_offset_y.max(0);
     }
 
     /// カーソルを次の行に移動します。
@@ -290,11 +308,10 @@ impl Editor {
     /// バッファの内容全体を選択します。
     pub fn select_all(&mut self) {
         // ドキュメントの先頭にカーソルを移動し、選択を開始
-        self.set_cursor_position(0, 0, true);
-
+        self.move_cursor_to_document_start(true);
         // ドキュメントの末尾にカーソルを移動して選択を完了
         // set_cursor_position が u16::MAX を適切に処理することを期待
-        self.set_cursor_position(u16::MAX, u16::MAX, true);
+        self.move_cursor_to_document_end(true);
     }
 
     /// 選択された範囲のテキストをコピーします。
