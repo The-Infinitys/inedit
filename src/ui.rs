@@ -14,7 +14,7 @@ use ratatui::{
 };
 
 /// Constants for UI layout dimensions
-
+/// 
 /// アプリケーションのUIを描画します。
 pub fn draw_ui(f: &mut Frame, app: &mut App) {
     let size = f.area();
