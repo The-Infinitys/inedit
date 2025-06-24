@@ -38,9 +38,8 @@ pub struct KeyBindings {
     pub delete_current_char: KeyEventConfig,  // Delete
 
     // Undo/Redo
-    pub undo: KeyEventConfig,                 // Ctrl+Z
-    pub redo: KeyEventConfig,                 // Ctrl+Y
-
+    pub undo: KeyEventConfig, // Ctrl+Z
+    pub redo: KeyEventConfig, // Ctrl+Y
 
     // カーソル移動
     pub move_left: KeyEventConfig,
@@ -152,7 +151,6 @@ impl Default for KeyBindings {
             // Undo/Redo
             undo: KeyEventConfig::from_key_event(KeyCode::Char('z'), KeyModifiers::CONTROL),
             redo: KeyEventConfig::from_key_event(KeyCode::Char('y'), KeyModifiers::CONTROL),
-
 
             move_left: KeyEventConfig::from_key_event(KeyCode::Left, KeyModifiers::NONE),
             move_right: KeyEventConfig::from_key_event(KeyCode::Right, KeyModifiers::NONE),

@@ -318,7 +318,7 @@ impl Editor {
     }
 
     /// 選択された範囲のテキストをコピーします。
-    pub fn copy_selection(&self) -> Option<String> {
+    pub fn copy_selection(&mut self) -> Option<String> {
         if let Some((start, end)) = self.get_selection_range() {
             Some(self.buffer[start..end].to_string())
         } else {
