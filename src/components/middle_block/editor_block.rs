@@ -2,7 +2,7 @@ use crate::app::App;
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Style, Modifier}, // Modifierも利用
+    style::Color, // Modifierも利用
     text::{Line, Span, Text},
     widgets::{Block, Borders, Paragraph, Wrap},
 };
@@ -18,7 +18,10 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
     let mut lines_for_paragraph: Vec<Line> = Vec::new();
 
     // 現在のシンタックスを取得 (Appで管理される)
-    let syntax: &SyntaxReference = app.highlighter.syntax_set.find_syntax_by_name(&app.current_syntax_name)
+    let syntax: &SyntaxReference = app
+        .highlighter
+        .syntax_set
+        .find_syntax_by_name(&app.current_syntax_name)
         .unwrap_or_else(|| app.highlighter.syntax_set.find_syntax_plain_text());
 
     // 全ての行をイテレートし、シンタックスハイライトと選択状態を考慮したスタイルを適用します。
@@ -42,11 +45,14 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
                     .map(|l| l.len() + 1) // +1は改行コードのバイトオフセット
                     .sum::<usize>();
 
-                let segment_global_start_offset = global_line_start_byte_offset + current_byte_offset_in_line;
+                let segment_global_start_offset =
+                    global_line_start_byte_offset + current_byte_offset_in_line;
                 let segment_global_end_offset = segment_global_start_offset + text.len(); // text.len()はバイト長
 
                 // セグメントが選択範囲と重なるかチェック
-                if segment_global_start_offset < sel_end_byte && segment_global_end_offset > sel_start_byte {
+                if segment_global_start_offset < sel_end_byte
+                    && segment_global_end_offset > sel_start_byte
+                {
                     base_style = base_style.bg(Color::Rgb(50, 50, 100)); // 選択色
                 }
             }
@@ -75,12 +81,19 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
     // ネイティブカーソルを描画する
     let mut visual_cursor_x_on_line = 0u16;
     if let Some(current_line) = editor_content.lines().nth(cursor_y as usize) {
-        let substring_before_cursor: String = current_line.chars().take(cursor_x as usize).collect();
+        let substring_before_cursor: String =
+            current_line.chars().take(cursor_x as usize).collect();
         visual_cursor_x_on_line = Line::from(substring_before_cursor).width() as u16;
     }
 
-    let actual_cursor_x_on_screen = area.x.saturating_add(visual_cursor_x_on_line).saturating_sub(app.editor.scroll_offset_x);
-    let actual_cursor_y_on_screen = area.y.saturating_add(cursor_y).saturating_sub(app.editor.scroll_offset_y);
+    let actual_cursor_x_on_screen = area
+        .x
+        .saturating_add(visual_cursor_x_on_line)
+        .saturating_sub(app.editor.scroll_offset_x);
+    let actual_cursor_y_on_screen = area
+        .y
+        .saturating_add(cursor_y)
+        .saturating_sub(app.editor.scroll_offset_y);
 
     if actual_cursor_x_on_screen < area.right() && actual_cursor_y_on_screen < area.bottom() {
         f.set_cursor_position((actual_cursor_x_on_screen, actual_cursor_y_on_screen));
