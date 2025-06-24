@@ -294,24 +294,6 @@ impl App {
             self.original_buffer = self.editor.buffer.clone();
             self.calculate_diff_status();
 
-            if let Some(temp_path) = &self.temp_path {
-                if temp_path.exists() {
-                    if let Err(e) = fs::remove_file(temp_path) {
-                        emsg!(
-                            self,
-                            "警告: 一時ファイル {:?} を削除できませんでした: {}",
-                            temp_path,
-                            e
-                        );
-                    } else {
-                        msg!(
-                            self,
-                            "一時ファイル {:?} は正常な保存後に削除されました。",
-                            temp_path
-                        );
-                    }
-                }
-            }
             Ok(())
         } else {
             emsg!(

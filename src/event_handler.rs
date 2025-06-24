@@ -22,7 +22,12 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
                             popup_state.input_mode = false;
                             popup_state.input_text.clear();
                             app.exit_popup_state = None;
-                            return Ok(AppControlFlow::TriggerSaveAndExit);
+                            // ここをTriggerSaveAndExitからContinueに変更
+                            match app.save_current_file() {
+                                Ok(_) => msg!(app, "ファイルが正常に保存されました。"),
+                                Err(e) => emsg!(app, "ファイルの保存に失敗しました: {}", e),
+                            }
+                            return Ok(AppControlFlow::Continue);
                         } else {
                             popup_state.input_mode = false;
                             msg!(app, "ファイルパスが空です。");
