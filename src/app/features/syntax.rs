@@ -1,11 +1,11 @@
 //! シンタックスハイライト機能と、言語の自動判別ロジックを提供します。
+use ratatui::style::{Color, Modifier, Style};
 use std::{collections::HashMap, path::Path};
 use syntect::{
-    parsing::{SyntaxReference, SyntaxSet},
-    highlighting::{ThemeSet, Style as SyntectStyle, Theme, FontStyle, Color as SyntectColor},
     easy::HighlightLines,
+    highlighting::{Color as SyntectColor, FontStyle, Style as SyntectStyle, Theme, ThemeSet},
+    parsing::{SyntaxReference, SyntaxSet},
 };
-use ratatui::style::{Color, Modifier, Style};
 
 /// シンタックスハイライト処理に必要なデータを保持します。
 pub struct Highlighter {
@@ -19,7 +19,7 @@ impl Default for Highlighter {
     fn default() -> Self {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
-        let current_theme_name = "InspiredGitHub".to_string(); // デフォルトテーマ
+        let current_theme_name = "Solarized (dark)".to_string(); // デフォルトテーマ
 
         let mut themes = HashMap::new();
         // ThemeSetから全てのテーマをHashMapにコピーして保持
@@ -61,8 +61,9 @@ impl Highlighter {
 
     /// 現在のテーマを取得します。
     pub fn get_current_theme(&self) -> &Theme {
-        self.themes.get(&self.current_theme_name)
-            .unwrap_or_else(|| &self.theme_set.themes["InspiredGitHub"]) // フォールバック
+        self.themes
+            .get(&self.current_theme_name)
+            .unwrap_or_else(|| &self.theme_set.themes["Solarized (dark)"]) // フォールバック
     }
 
     /// 指定された行に対してシンタックスハイライトを適用し、`syntect`のスタイルとテキストのペアのVecを返します。
@@ -72,10 +73,9 @@ impl Highlighter {
         syntax: &SyntaxReference,
     ) -> Vec<(SyntectStyle, &'a str)> {
         let mut highlighter = HighlightLines::new(syntax, self.get_current_theme());
-        highlighter.highlight_line(line, &self.syntax_set)
-            .unwrap_or_else(|_| {
-                vec![(SyntectStyle::default(), line)]
-            })
+        highlighter
+            .highlight_line(line, &self.syntax_set)
+            .unwrap_or_else(|_| vec![(SyntectStyle::default(), line)])
     }
 
     /// `syntect`のスタイルを`ratatui`のスタイルに変換します。
@@ -124,14 +124,18 @@ impl Highlighter {
     /// 現在のテーマの背景色を`ratatui::style::Color`で取得します。
     pub fn get_background_color(&self) -> Color {
         let theme = self.get_current_theme();
-        theme.settings.background
+        theme
+            .settings
+            .background
             .map_or(Color::Black, convert_syntect_color)
     }
 
     /// 現在のテーマの前景色（基本テキスト色）を`ratatui::style::Color`で取得します。
     pub fn get_foreground_color(&self) -> Color {
         let theme = self.get_current_theme();
-        theme.settings.foreground
+        theme
+            .settings
+            .foreground
             .map_or(Color::White, convert_syntect_color)
     }
 }

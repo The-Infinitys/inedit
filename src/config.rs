@@ -1,10 +1,10 @@
 //! アプリケーションの設定（カラーテーマ、キーバインドなど）を管理します。
 //! 設定ファイルが存在しない場合はデフォルト設定で作成し、存在する場合は読み込みます。
 
-use serde::{Deserialize, Serialize};
-use std::{fs, io, path::PathBuf};
+use crossterm::event::{KeyCode, KeyModifiers};
 use directories::ProjectDirs; // クロスプラットフォームな設定ファイルパス解決のため
-use crossterm::event::{KeyCode, KeyModifiers}; // KeyCodeとKeyModifiersをインポート
+use serde::{Deserialize, Serialize};
+use std::{fs, io, path::PathBuf}; // KeyCodeとKeyModifiersをインポート
 
 const CONFIG_FILE_NAME: &str = "config.yaml";
 
@@ -28,22 +28,22 @@ pub struct KeyBindings {
     pub open_file: KeyEventConfig, // Ctrl+O (未実装だが予約)
 
     // 編集操作
-    pub copy: KeyEventConfig,    // Ctrl+C
-    pub cut: KeyEventConfig,     // Ctrl+X
-    pub paste: KeyEventConfig,   // Ctrl+V
-    pub select_all: KeyEventConfig, // Ctrl+A
-    pub insert_newline: KeyEventConfig, // Enter
-    pub insert_tab: KeyEventConfig, // Tab
+    pub copy: KeyEventConfig,                 // Ctrl+C
+    pub cut: KeyEventConfig,                  // Ctrl+X
+    pub paste: KeyEventConfig,                // Ctrl+V
+    pub select_all: KeyEventConfig,           // Ctrl+A
+    pub insert_newline: KeyEventConfig,       // Enter
+    pub insert_tab: KeyEventConfig,           // Tab
     pub delete_previous_char: KeyEventConfig, // Backspace
-    pub delete_current_char: KeyEventConfig, // Delete
+    pub delete_current_char: KeyEventConfig,  // Delete
 
     // カーソル移動
     pub move_left: KeyEventConfig,
     pub move_right: KeyEventConfig,
     pub move_up: KeyEventConfig,
     pub move_down: KeyEventConfig,
-    pub move_line_start: KeyEventConfig, // Home
-    pub move_line_end: KeyEventConfig,   // End
+    pub move_line_start: KeyEventConfig,     // Home
+    pub move_line_end: KeyEventConfig,       // End
     pub move_document_start: KeyEventConfig, // Ctrl+Home (または類似)
     pub move_document_end: KeyEventConfig,   // Ctrl+End (または類似)
 
@@ -54,7 +54,7 @@ pub struct KeyBindings {
 /// キーイベントをシリアライズ/デシリアライズ可能な形式で表現
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KeyEventConfig {
-    pub code: String, // KeyCodeを文字列で保存 (例: "Char(q)", "Esc", "Left")
+    pub code: String,           // KeyCodeを文字列で保存 (例: "Char(q)", "Esc", "Left")
     pub modifiers: Vec<String>, // KeyModifiersを文字列のVecで保存 (例: ["Control", "Shift"])
 }
 
@@ -100,16 +100,18 @@ impl KeyEventConfig {
         }
 
         // Modifiersの数と内容が完全に一致するか確認
-        self.modifiers.len() == event_modifiers_vec.len() &&
-        self.modifiers.iter().all(|m| event_modifiers_vec.contains(&m.as_str()))
+        self.modifiers.len() == event_modifiers_vec.len()
+            && self
+                .modifiers
+                .iter()
+                .all(|m| event_modifiers_vec.contains(&m.as_str()))
     }
 }
-
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            color_theme: "InspiredGitHub".to_string(), // デフォルトのテーマ名
+            color_theme: "Solarized (dark)".to_string(), // デフォルトのテーマ名
             key_bindings: KeyBindings::default(),
         }
     }
@@ -131,8 +133,14 @@ impl Default for KeyBindings {
             select_all: KeyEventConfig::from_key_event(KeyCode::Char('a'), KeyModifiers::CONTROL),
             insert_newline: KeyEventConfig::from_key_event(KeyCode::Enter, KeyModifiers::NONE),
             insert_tab: KeyEventConfig::from_key_event(KeyCode::Tab, KeyModifiers::NONE),
-            delete_previous_char: KeyEventConfig::from_key_event(KeyCode::Backspace, KeyModifiers::NONE),
-            delete_current_char: KeyEventConfig::from_key_event(KeyCode::Delete, KeyModifiers::NONE),
+            delete_previous_char: KeyEventConfig::from_key_event(
+                KeyCode::Backspace,
+                KeyModifiers::NONE,
+            ),
+            delete_current_char: KeyEventConfig::from_key_event(
+                KeyCode::Delete,
+                KeyModifiers::NONE,
+            ),
 
             move_left: KeyEventConfig::from_key_event(KeyCode::Left, KeyModifiers::NONE),
             move_right: KeyEventConfig::from_key_event(KeyCode::Right, KeyModifiers::NONE),
@@ -140,8 +148,11 @@ impl Default for KeyBindings {
             move_down: KeyEventConfig::from_key_event(KeyCode::Down, KeyModifiers::NONE),
             move_line_start: KeyEventConfig::from_key_event(KeyCode::Home, KeyModifiers::NONE),
             move_line_end: KeyEventConfig::from_key_event(KeyCode::End, KeyModifiers::NONE),
-            move_document_start: KeyEventConfig::from_key_event(KeyCode::Home, KeyModifiers::CONTROL), // Ctrl+Home
-            move_document_end: KeyEventConfig::from_key_event(KeyCode::End, KeyModifiers::CONTROL),     // Ctrl+End
+            move_document_start: KeyEventConfig::from_key_event(
+                KeyCode::Home,
+                KeyModifiers::CONTROL,
+            ), // Ctrl+Home
+            move_document_end: KeyEventConfig::from_key_event(KeyCode::End, KeyModifiers::CONTROL), // Ctrl+End
 
             toggle_word_wrap: KeyEventConfig::from_key_event(KeyCode::Char('z'), KeyModifiers::ALT),
         }
@@ -215,12 +226,19 @@ pub fn load_or_create_config() -> Config {
 /// 設定をファイルに保存します。
 pub fn save_config(config: &Config) -> io::Result<()> {
     if let Some(config_path) = get_config_path() {
-        let yaml_content = serde_yaml::to_string(config)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("Failed to serialize config: {}", e)))?;
+        let yaml_content = serde_yaml::to_string(config).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to serialize config: {}", e),
+            )
+        })?;
         fs::write(&config_path, yaml_content)?;
         // eprintln!("Config saved to {:?}", config_path);
         Ok(())
     } else {
-        Err(io::Error::new(io::ErrorKind::Other, "Could not determine config path for saving."))
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "Could not determine config path for saving.",
+        ))
     }
 }
