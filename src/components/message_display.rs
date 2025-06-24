@@ -34,14 +34,11 @@ pub fn render_message_display(f: &mut Frame, area: Rect, app: &App) {
     // 最新のメッセージが下に来るように逆順に並べ替え（画面下から上へ表示するため）
     visible_messages.reverse();
 
-    // 表示エリアの高さに合わせて、表示するメッセージ数を制限
-    let display_height = area.height as usize;
-    if visible_messages.len() > display_height {
-        visible_messages.truncate(display_height);
-    }
+    // ui.rs で既に表示エリアの高さが調整されているため、ここでのtruncateは不要です。
+    // Paragraphウィジェットは、渡されたTextの行数がarea.heightを超える場合、自動的にクリップします。
 
-    // 表示するメッセージがない場合は、コンポーネントを描画せず、早期リターンする
-    if visible_messages.is_empty() {
+    // 表示するメッセージがない場合、または表示エリアの高さが0の場合は描画しない
+    if visible_messages.is_empty() || area.height == 0 {
         return;
     }
 

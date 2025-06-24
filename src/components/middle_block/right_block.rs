@@ -42,35 +42,35 @@ pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
         } else {
             line_content.push('|'); // レール部分
         }
-
-        // 差分マーカーの描画
-        let corresponding_editor_line_idx = (app.editor.scroll_offset_y + y_on_screen) as usize;
-        let diff_marker =
-            if let Some(&status) = app.line_statuses.get(corresponding_editor_line_idx) {
-                match status {
-                    LineStatus::Modified => Style::default().fg(Color::Yellow),
-                    LineStatus::Added => Style::default().fg(Color::Green),
-                    LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
-                }
-            } else {
-                Style::default().fg(Color::DarkGray) // 該当する行がない場合
-            };
-
-        // マーカーの文字 (' ', '~', '+')
-        let marker_char =
-            if let Some(&status) = app.line_statuses.get(corresponding_editor_line_idx) {
-                match status {
-                    LineStatus::Modified => '~',
-                    LineStatus::Added => '+',
-                    LineStatus::Unchanged => ' ',
-                }
-            } else {
-                ' ' // 該当する行がない場合
-            };
-
         spans.push(Span::raw(line_content)); // スクロールバー部分
-        spans.push(Span::styled(marker_char.to_string(), diff_marker)); // 差分マーカー
 
+        // 差分マーカーの描画 (該当する行がある場合のみ)
+        let corresponding_editor_line_idx = (app.editor.scroll_offset_y + y_on_screen) as usize;
+        let total_editor_lines = app.editor.buffer.lines().count(); // バッファの実際の総行数
+
+        if corresponding_editor_line_idx < total_editor_lines {
+            // 該当する行が存在する場合のみ差分マーカーを表示
+            let status = app
+                .line_statuses
+                .get(corresponding_editor_line_idx)
+                .copied()
+                .unwrap_or(LineStatus::Unchanged); // 安全のため
+
+            let diff_style = match status {
+                LineStatus::Modified => Style::default().fg(Color::Yellow),
+                LineStatus::Added => Style::default().fg(Color::Green),
+                LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
+            };
+            let marker_char = match status {
+                LineStatus::Modified => '~',
+                LineStatus::Added => '+',
+                LineStatus::Unchanged => ' ',
+            };
+            spans.push(Span::styled(marker_char.to_string(), diff_style));
+        } else {
+            // 該当する行がない場合は空のSpanを追加し、スペースを確保（可視文字は描画しない）
+            spans.push(Span::raw(" "));
+        }
         scrollbar_content.push(Line::from(spans));
     }
 

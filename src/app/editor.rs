@@ -89,14 +89,20 @@ impl Editor {
     }
 
     /// 描画領域のサイズに基づいてスクロールオフセットを調整し、カーソルが見えるようにします。
+    ///
+    /// **重要:** このメソッドは`scroll_offset_y`と`scroll_offset_x`を設定します。
+    /// 実際の描画を行う際は、`scroll_offset_y`から始まり、`scroll_offset_y + viewport_area.height`までの行を描画するのではなく、
+    /// 必ず `self.buffer.lines().count()`（バッファの実際の行数）を超えないようにしてください。
+    /// 例えば、`for i in self.scroll_offset_y .. min(self.scroll_offset_y + viewport_area.height, self.buffer.lines().count() as u16)`
+    /// のようにループの終端を制限することで、存在しない行が表示されるのを防ぐことができます。
     pub fn adjust_viewport_offset(&mut self, viewport_area: Rect) {
         let cursor_y = self.cursor.y;
         let cursor_x = self.cursor.x;
         let viewport_height = viewport_area.height;
         let viewport_width = viewport_area.width;
 
-        const PADDING_Y: u16 = 3; // 垂直方向のパディング
-        const PADDING_X: u16 = 5; // 水平方向のパディング
+        const PADDING_Y: u16 = 1; // 垂直方向のパディング
+        const PADDING_X: u16 = 1; // 水平方向のパディング
 
         // 垂直スクロール (Y軸)
         // カーソルが上端に近づいた場合

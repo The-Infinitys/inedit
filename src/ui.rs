@@ -4,10 +4,9 @@ use crate::{
     components::{
         bottom_bar::render_bottom_bar,
         message_display::render_message_display,
-        middle_block::editor_block::render_editor_block, // 新規
-        middle_block::left_block::render_left_block,     // 新規
-        middle_block::right_block::render_right_block,   // 新規
-        // middle_block を削除
+        middle_block::editor_block::render_editor_block,
+        middle_block::left_block::render_left_block,
+        middle_block::right_block::render_right_block,
         top_bar::render_top_bar,
     },
 };
@@ -37,8 +36,8 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     render_top_bar(f, main_chunks[0], app);
 
     // メインエディタ領域をさらに分割 (Left Block + Editor Block + Right Block)
-    // 左ブロック (行番号と差分): 5文字固定 (例: "  999 +")
-    // 右ブロック (スクロールバーと差分): 3文字固定 (例: " |#")
+    // 左ブロック (行番号と差分): 7文字固定 (例: "    1 + ")
+    // 右ブロック (スクロールバーと差分): 3文字固定 (例: " |~")
     // エディタ本体: 残りのスペース
     let editor_area_chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -69,21 +68,30 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     render_bottom_bar(f, main_chunks[2], app);
 
     // メッセージ通知エリアを計算 (画面全体の右下)
-    const MESSAGE_HEIGHT: u16 = 3; // メッセージ表示の最大行数
+    const MAX_MESSAGE_HEIGHT: u16 = 5; // メッセージ表示の最大行数
     const MESSAGE_WIDTH: u16 = 40; // メッセージ表示の幅
     const MESSAGE_MARGIN: u16 = 1; // 画面端からのマージン
 
-    let msg_area = Rect {
-        x: size
-            .width
-            .saturating_sub(MESSAGE_WIDTH)
-            .saturating_sub(MESSAGE_MARGIN),
-        y: size
-            .height
-            .saturating_sub(MESSAGE_HEIGHT)
-            .saturating_sub(MESSAGE_MARGIN),
-        width: MESSAGE_WIDTH,
-        height: MESSAGE_HEIGHT,
+    // 表示されるメッセージの実際の行数を取得し、最大高さを適用
+    let actual_message_lines = app.get_visible_message_count().min(MAX_MESSAGE_HEIGHT);
+
+    let msg_area = if actual_message_lines > 0 {
+        // メッセージがある場合のみ Rect を作成
+        Rect {
+            x: size
+                .width
+                .saturating_sub(MESSAGE_WIDTH)
+                .saturating_sub(MESSAGE_MARGIN),
+            y: size
+                .height
+                .saturating_sub(actual_message_lines) // 実際のメッセージ数を使用
+                .saturating_sub(MESSAGE_MARGIN),
+            width: MESSAGE_WIDTH,
+            height: actual_message_lines, // 実際のメッセージ数を使用
+        }
+    } else {
+        // メッセージがない場合は、Rectのheightを0にすることで描画されないようにする
+        Rect::new(0, 0, 0, 0)
     };
 
     // メッセージ通知の描画

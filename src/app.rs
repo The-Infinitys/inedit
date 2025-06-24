@@ -8,7 +8,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant}; // DurationとInstantをインポート
 
 // msg!とemsg!マクロをインポート
 use crate::{emsg, msg};
@@ -103,6 +103,11 @@ impl App {
 
             msg!(app, "元のファイルパス: {:?}", original_path);
             msg!(app, "一時ファイルパス: {:?}", temp_path);
+            msg!(
+                app,
+                "ファイルの行数: {}",
+                app.editor.buffer.lines().collect::<Vec<&str>>().len()
+            );
 
             // まず一時ファイルからの読み込みを試みる
             if temp_path.exists() {
@@ -261,5 +266,16 @@ impl App {
         // ここでは、original_linesに存在しcurrent_linesに存在しない行（削除された行）は
         // line_statusesの長さには影響しません。UI側でoriginal_bufferの行数と比較して、
         // 削除された行のギャップを表現することを検討できますが、今回は簡易的なアプローチです。
+    }
+
+    /// 現在表示されているメッセージの数を返します。
+    /// これにより、UIはメッセージの数に応じて表示エリアのサイズを調整できます。
+    pub fn get_visible_message_count(&self) -> u16 {
+        const MESSAGE_LIFETIME_SECS: u64 = 3; // メッセージの表示期間（秒）
+        let now = Instant::now();
+        self.messages
+            .iter()
+            .filter(|(_, _, timestamp)| now.duration_since(*timestamp) < Duration::from_secs(MESSAGE_LIFETIME_SECS))
+            .count() as u16
     }
 }
