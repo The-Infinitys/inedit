@@ -15,19 +15,20 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
 
     // 折返しモード対応: 画面上の各行に対してバッファ行番号・折返し行番号を取得
     let visual_lines = if app.word_wrap_enabled {
-        app.editor.get_visual_lines()
+        // スクロールオフセットからarea.height分だけ詰めて表示
+        let all = app.editor.get_visual_lines_with_width(area.width as usize);
+        let start = app.editor.scroll_offset_y as usize;
+        let end = (start + area.height as usize).min(all.len());
+        all[start..end].to_vec()
     } else {
-        // 折返しなし: 1バッファ行=1画面行
-        app.editor
-            .buffer
-            .lines()
-            .enumerate()
-            .map(|(i, line)| (i, 0, line.to_string()))
-            .collect()
+        let all: Vec<_> = app.editor.buffer.lines().enumerate().map(|(i, line)| (i, 0, line.to_string())).collect();
+        let start = app.editor.scroll_offset_y as usize;
+        let end = (start + area.height as usize).min(all.len());
+        all[start..end].to_vec()
     };
 
-    for (buf_idx, wrap_idx, _line_str) in visual_lines.iter().take(area.height as usize) {
-        // 折返し1行目のみ行番号・差分を表示、それ以外は空白
+    // 表示する行数分だけlines_to_displayを構築
+    for (buf_idx, wrap_idx, _line_str) in visual_lines.iter() {
         if *wrap_idx == 0 {
             let line_number = (*buf_idx + 1).to_string();
             let line_status = app
@@ -36,12 +37,8 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
                 .copied()
                 .unwrap_or(LineStatus::Unchanged);
             let diff_symbol_style = match line_status {
-                LineStatus::Modified => Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(ratatui::style::Modifier::BOLD),
-                LineStatus::Added => Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(ratatui::style::Modifier::BOLD),
+                LineStatus::Modified => Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD),
+                LineStatus::Added => Style::default().fg(Color::Green).add_modifier(ratatui::style::Modifier::BOLD),
                 LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
             };
             let diff_symbol = match line_status {
@@ -53,11 +50,8 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
             let diff_span = Span::styled(format!("{} ", diff_symbol), diff_symbol_style);
             lines_to_display.push(Line::from(vec![line_num_span, diff_span]));
         } else {
-            // 折返し2行目以降は空白
-            lines_to_display.push(Line::from(vec![Span::styled(
-                "      ",
-                Style::default().fg(Color::DarkGray),
-            )]));
+            // 折返し2行目以降は行番号・差分を空白で埋める
+            lines_to_display.push(Line::from(vec![Span::styled("      ", Style::default().fg(Color::DarkGray))]));
         }
     }
 

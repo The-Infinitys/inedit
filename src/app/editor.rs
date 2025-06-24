@@ -20,6 +20,7 @@ pub struct Editor {
     pub current_search_idx: Option<usize>, // 現在の検索結果のインデックス
     pub scroll_offset_y: u16,            // 垂直方向のスクロールオフセット (行単位)
     pub scroll_offset_x: u16,            // 水平方向のスクロールオフセット (文字単位)
+    pub cursor_wrap_idx: usize, // 折返しインデックスを追加
     undo_stack: Vec<String>,
     redo_stack: Vec<String>,
 }
@@ -35,6 +36,7 @@ impl Editor {
             current_search_idx: None,
             scroll_offset_y: 0, // 初期スクロールオフセット
             scroll_offset_x: 0, // 初期スクロールオフセット
+            cursor_wrap_idx: 0, // 初期値
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
         }
@@ -869,6 +871,69 @@ impl Editor {
         let lines: Vec<&str> = self.buffer.lines().collect();
         // 仮: 1画面行=40文字で折返し（本来はエディタ幅を引数で受けるべき）
         let wrap_width = 40;
+        for (buf_idx, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                result.push((buf_idx, 0, String::new()));
+                continue;
+            }
+            let mut start = 0;
+            let mut wrap_idx = 0;
+            let chars: Vec<char> = line.chars().collect();
+            while start < chars.len() {
+                let end = (start + wrap_width).min(chars.len());
+                let visual = chars[start..end].iter().collect::<String>();
+                result.push((buf_idx, wrap_idx, visual));
+                start = end;
+                wrap_idx += 1;
+            }
+        }
+        result
+    }
+    /// 折返しモード対応: wrap行単位でカーソルを上下移動
+    pub fn next_visual_line(&mut self, area_width: usize, extend_selection: bool) {
+        let visual_lines = self.get_visual_lines_with_width(area_width);
+        let mut found = None;
+        for (i, (buf_idx, wrap_idx, _)) in visual_lines.iter().enumerate() {
+            if *buf_idx == self.cursor.y as usize && *wrap_idx == self.cursor_wrap_idx {
+                found = Some(i);
+                break;
+            }
+        }
+        if let Some(i) = found {
+            if i + 1 < visual_lines.len() {
+                let (next_buf_idx, next_wrap_idx, next_line) = &visual_lines[i + 1];
+                let x = self.cursor.x.min(next_line.chars().count() as u16);
+                self.cursor.x = x;
+                self.cursor.y = *next_buf_idx as u16;
+                self.cursor_wrap_idx = *next_wrap_idx;
+                self.cursor.update_position(x, *next_buf_idx as u16, extend_selection);
+            }
+        }
+    }
+    pub fn previous_visual_line(&mut self, area_width: usize, extend_selection: bool) {
+        let visual_lines = self.get_visual_lines_with_width(area_width);
+        let mut found = None;
+        for (i, (buf_idx, wrap_idx, _)) in visual_lines.iter().enumerate() {
+            if *buf_idx == self.cursor.y as usize && *wrap_idx == self.cursor_wrap_idx {
+                found = Some(i);
+                break;
+            }
+        }
+        if let Some(i) = found {
+            if i > 0 {
+                let (prev_buf_idx, prev_wrap_idx, prev_line) = &visual_lines[i - 1];
+                let x = self.cursor.x.min(prev_line.chars().count() as u16);
+                self.cursor.x = x;
+                self.cursor.y = *prev_buf_idx as u16;
+                self.cursor_wrap_idx = *prev_wrap_idx;
+                self.cursor.update_position(x, *prev_buf_idx as u16, extend_selection);
+            }
+        }
+    }
+    /// 指定幅でwrapしたvisual linesを返す
+    pub fn get_visual_lines_with_width(&self, wrap_width: usize) -> Vec<(usize, usize, String)> {
+        let mut result = Vec::new();
+        let lines: Vec<&str> = self.buffer.lines().collect();
         for (buf_idx, line) in lines.iter().enumerate() {
             if line.is_empty() {
                 result.push((buf_idx, 0, String::new()));
