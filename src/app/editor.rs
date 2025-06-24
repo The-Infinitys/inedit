@@ -11,7 +11,7 @@ pub struct Editor {
     pub buffer: String,
     pub cursor: Cursor,
     pub search_query: String,
-    pub search_matches: Vec<(u16, u16)>,   // 検索結果の(y, x)位置 (文字単位)
+    pub search_matches: Vec<(u16, u16)>, // 検索結果の(y, x)位置 (文字単位)
     pub current_search_idx: Option<usize>, // 現在の検索結果のインデックス
 }
 
@@ -73,7 +73,8 @@ impl Editor {
         }
 
         // Cursorのupdate_positionメソッドを呼び出し、実際のカーソル位置を更新
-        self.cursor.update_position(final_x, final_y, extend_selection);
+        self.cursor
+            .update_position(final_x, final_y, extend_selection);
     }
 
     /// カーソルを次の行に移動します。
@@ -133,14 +134,22 @@ impl Editor {
     /// カーソルを現在の行の先頭に移動します。
     pub fn move_cursor_to_line_start(&mut self, extend_selection: bool) {
         let current_y = self.cursor.y;
-        self.set_cursor_position(self.cursor.get_potential_start_of_line_x(), current_y, extend_selection);
+        self.set_cursor_position(
+            self.cursor.get_potential_start_of_line_x(),
+            current_y,
+            extend_selection,
+        );
     }
 
     /// カーソルを現在の行の末尾に移動します。
     pub fn move_cursor_to_line_end(&mut self, extend_selection: bool) {
         let current_y = self.cursor.y;
         // u16::MAX を渡して、set_cursor_position に行末を計算させる
-        self.set_cursor_position(self.cursor.get_potential_end_of_line_x(), current_y, extend_selection);
+        self.set_cursor_position(
+            self.cursor.get_potential_end_of_line_x(),
+            current_y,
+            extend_selection,
+        );
     }
 
     /// カーソルをドキュメントの先頭に移動します。
@@ -222,13 +231,17 @@ impl Editor {
             // バイトオフセットから新しいカーソル座標を計算
             let lines_before_cut: Vec<&str> = self.buffer[..start_byte_offset].lines().collect();
             let new_y = (lines_before_cut.len() as u16).saturating_sub(1); // 切り取り開始行
-            let new_x = if new_y == u16::MAX { // バッファの先頭で切り取りの場合
+            let new_x = if new_y == u16::MAX {
+                // バッファの先頭で切り取りの場合
                 0
             } else {
-                lines_before_cut.last().map_or(0, |last_line| last_line.chars().count() as u16)
+                lines_before_cut
+                    .last()
+                    .map_or(0, |last_line| last_line.chars().count() as u16)
             };
 
-            self.buffer.replace_range(start_byte_offset..end_byte_offset, ""); // 選択範囲を削除
+            self.buffer
+                .replace_range(start_byte_offset..end_byte_offset, ""); // 選択範囲を削除
 
             // カーソル位置を切り取った後の位置に設定し、選択を解除
             self.set_cursor_position(new_x, new_y, false);
@@ -280,9 +293,7 @@ impl Editor {
             // 文字の境界を考慮して、前の文字のバイト開始位置を特定
             let mut char_start_offset = current_offset;
             // マルチバイト文字の途中にカーソルがある場合は、文字の先頭まで戻る
-            while char_start_offset > 0
-                && !self.buffer.is_char_boundary(char_start_offset - 1)
-            {
+            while char_start_offset > 0 && !self.buffer.is_char_boundary(char_start_offset - 1) {
                 char_start_offset -= 1;
             }
             if char_start_offset > 0 {
@@ -470,7 +481,11 @@ impl Editor {
         } else {
             // 逆方向検索 (カーソル位置から先頭まで)
             // 現在の行 (カーソル位置の1つ前から逆順に走査)
-            let start_x_for_backward_search = if current_x > 0 { current_x.saturating_sub(1) } else { 0 };
+            let start_x_for_backward_search = if current_x > 0 {
+                current_x.saturating_sub(1)
+            } else {
+                0
+            };
 
             for x_idx in (0..=start_x_for_backward_search).rev() {
                 let ch = current_line_chars[x_idx];
@@ -536,7 +551,8 @@ impl Editor {
         // 仮のキーワードリスト (Rust風)
         let keywords = vec![
             "fn", "let", "if", "else", "while", "for", "match", "loop", "struct", "enum", "use",
-            "mod", "pub", "mut", "return", "break", "continue", "impl", "trait", "where", "async", "await", "unsafe",
+            "mod", "pub", "mut", "return", "break", "continue", "impl", "trait", "where", "async",
+            "await", "unsafe",
         ];
 
         // 仮の識別子リスト (バッファ内の単語から取得)
@@ -621,11 +637,7 @@ impl Editor {
 
         // 現在位置より後に見つかった場合はその位置へ
         // 見つからなかった場合は、リストの先頭に戻る (ラップアラウンド)
-        let final_idx = if next_idx_found {
-            closest_next_idx
-        } else {
-            0
-        };
+        let final_idx = if next_idx_found { closest_next_idx } else { 0 };
 
         self.current_search_idx = Some(final_idx);
         let (y, x) = self.search_matches[final_idx];
