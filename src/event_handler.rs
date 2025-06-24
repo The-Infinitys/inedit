@@ -21,13 +21,21 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
                             app.target_path = Some(std::path::PathBuf::from(&popup_state.input_text));
                             popup_state.input_mode = false;
                             popup_state.input_text.clear();
+                            // SaveAndExitならexit、そうでなければContinue
+                            let is_save_and_exit = matches!(
+                                popup_state.selected_option,
+                                crate::app::ExitPopupOption::SaveAndExit
+                            );
                             app.exit_popup_state = None;
-                            // ここをTriggerSaveAndExitからContinueに変更
                             match app.save_current_file() {
                                 Ok(_) => msg!(app, "ファイルが正常に保存されました。"),
                                 Err(e) => emsg!(app, "ファイルの保存に失敗しました: {}", e),
                             }
-                            return Ok(AppControlFlow::Continue);
+                            if is_save_and_exit {
+                                return Ok(AppControlFlow::TriggerSaveAndExit);
+                            } else {
+                                return Ok(AppControlFlow::Continue);
+                            }
                         } else {
                             popup_state.input_mode = false;
                             msg!(app, "ファイルパスが空です。");
@@ -59,14 +67,25 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
             let popup_result = app.handle_exit_popup_key(key);
             match popup_result {
                 ExitPopupResult::SaveAndExit => {
+                    // パス未指定ならパス入力ポップアップを表示
                     if app.target_path.is_none() {
                         if let Some(popup_state) = app.exit_popup_state.as_mut() {
                             popup_state.selected_option = crate::app::ExitPopupOption::SaveAndExit;
                             popup_state.input_mode = true;
                             popup_state.input_text.clear();
                             return Ok(AppControlFlow::ShowExitPopup);
+                        } else {
+                            // 念のためexit_popup_stateがNoneなら新規作成
+                            app.exit_popup_state = Some(Default::default());
+                            if let Some(popup_state) = app.exit_popup_state.as_mut() {
+                                popup_state.selected_option = crate::app::ExitPopupOption::SaveAndExit;
+                                popup_state.input_mode = true;
+                                popup_state.input_text.clear();
+                            }
+                            return Ok(AppControlFlow::ShowExitPopup);
                         }
                     }
+                    // パスがある場合は保存して終了
                     return Ok(AppControlFlow::TriggerSaveAndExit);
                 }
                 ExitPopupResult::DiscardAndExit => {
