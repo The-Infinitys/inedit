@@ -171,8 +171,8 @@ impl Editor {
         }
 
         // スクロールオフセットは常に0以上であることを保証
-        self.scroll_offset_x = self.scroll_offset_x.max(0);
-        self.scroll_offset_y = self.scroll_offset_y.max(0);
+        self.scroll_offset_x = self.scroll_offset_x;
+        self.scroll_offset_y = self.scroll_offset_y;
     }
 
     /// カーソルを次の行に移動します。
