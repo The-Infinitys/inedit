@@ -60,7 +60,7 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     render_editor_block(f, editor_area_chunks[1], app);
 
     // Right Block の描画
-    render_right_block(f, editor_area_chunks[2], app);
+    render_right_block(f, editor_area_chunks[2], editor_area_chunks[1], app);
 
     // Bottom Bar の描画
     render_bottom_bar(f, main_chunks[2], app);

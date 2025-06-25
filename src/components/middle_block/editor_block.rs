@@ -43,13 +43,17 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
         let mut spans: Vec<Span> = Vec::new();
         let highlighted_segments = app.highlighter.highlight_line(line_str, syntax);
         // visual lineのグローバルバイトオフセットを計算
-        let global_line_start_byte_offset = app.editor.get_visual_line_global_offset(*buf_idx, *wrap_idx, wrap_width);
+        let global_line_start_byte_offset = app
+            .editor
+            .get_visual_line_global_offset(*buf_idx, *wrap_idx, wrap_width);
         let global_line_end_byte_offset = global_line_start_byte_offset + line_str.len();
-        let line_selected = sel_start_byte < global_line_end_byte_offset && sel_end_byte > global_line_start_byte_offset;
+        let line_selected = sel_start_byte < global_line_end_byte_offset
+            && sel_end_byte > global_line_start_byte_offset;
         let mut current_byte_offset_in_line = 0;
         for (syntect_style, text) in highlighted_segments {
             let base_style = super::super::super::app::features::syntax::Highlighter::convert_syntect_style_to_ratatui_style(syntect_style);
-            let segment_global_start_offset = global_line_start_byte_offset + current_byte_offset_in_line;
+            let segment_global_start_offset =
+                global_line_start_byte_offset + current_byte_offset_in_line;
             let segment_global_end_offset = segment_global_start_offset + text.len();
             if line_selected {
                 let seg_sel_start = sel_start_byte.max(segment_global_start_offset);
@@ -88,13 +92,12 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
     }
     let theme_bg = app.highlighter.get_background_color();
     let theme_fg = app.highlighter.get_foreground_color();
-    let mut paragraph = Paragraph::new(Text::from(lines_for_paragraph))
-        .block(
-            Block::default()
-                .borders(Borders::NONE)
-                .bg(theme_bg)
-                .fg(theme_fg),
-        );
+    let mut paragraph = Paragraph::new(Text::from(lines_for_paragraph)).block(
+        Block::default()
+            .borders(Borders::NONE)
+            .bg(theme_bg)
+            .fg(theme_fg),
+    );
     // 折返し表示モードの設定
     if app.word_wrap_enabled {
         paragraph = paragraph.wrap(Wrap { trim: false });
@@ -104,11 +107,43 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
     }
     f.render_widget(paragraph, area);
     // カーソル描画
-    // visual_lines内で現在のカーソル位置を探す
-    let (cursor_visual_idx, cursor_x_in_visual) = app.editor.get_cursor_visual_position(wrap_width);
-    let cursor_screen_y = area.y + (cursor_visual_idx as u16).saturating_sub(app.editor.scroll_offset_y);
-    let cursor_screen_x = area.x + (cursor_x_in_visual as u16).saturating_sub(app.editor.scroll_offset_x);
-    if cursor_screen_x < area.right() && cursor_screen_y < area.bottom() {
-        f.set_cursor_position((cursor_screen_x, cursor_screen_y));
+    // `get_cursor_visual_position`は、カーソルのビジュアル行インデックスと、
+    // その行の先頭からのバイトオフセットを返すと仮定します。
+    let (cursor_visual_idx, cursor_x_byte_offset) =
+        app.editor.get_cursor_visual_position(wrap_width);
+
+    // ビジュアル行のインデックスが、計算済みの`visual_lines`の範囲内にあるか確認します。
+    if cursor_visual_idx < visual_lines.len() {
+        // 該当するビジュアル行の文字列スライスを取得します。
+        let (_, _, line_str) = &visual_lines[cursor_visual_idx];
+
+        // バイトオフセットを、ターミナル上での表示幅（カラム数）に変換します。
+        // これにより、全角文字などが正しく扱われます。
+        let byte_offset = cursor_x_byte_offset.min(line_str.len());
+        let cursor_x_in_visual = Span::from(&line_str[..byte_offset]).width();
+
+        // カーソルの画面上のY座標を計算します（垂直スクロールを考慮）。
+        let cursor_screen_y =
+            area.y + (cursor_visual_idx as u16).saturating_sub(app.editor.scroll_offset_y);
+
+        // カーソルが描画エリア内にあれば、位置を設定します。
+        if cursor_screen_y < area.bottom() {
+            if app.word_wrap_enabled {
+                let cursor_screen_x = area.x + cursor_x_in_visual as u16;
+                if cursor_screen_x < area.right() {
+                    f.set_cursor_position((cursor_screen_x, cursor_screen_y));
+                }
+            } else {
+                // 折り返し無効時は、水平スクロールを考慮します。
+                if let Some(relative_x) =
+                    (cursor_x_in_visual as u16).checked_sub(app.editor.scroll_offset_x)
+                {
+                    let cursor_screen_x = area.x + relative_x;
+                    if cursor_screen_x < area.right() {
+                        f.set_cursor_position((cursor_screen_x, cursor_screen_y));
+                    }
+                }
+            }
+        }
     }
 }

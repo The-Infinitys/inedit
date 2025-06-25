@@ -8,9 +8,9 @@ use ratatui::{
 };
 
 /// Right Block を描画します。スクロールバーと差分マーカーを表示します。
-pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
+pub fn render_right_block(f: &mut Frame, area: Rect,editor_area:Rect, app: &App) {
     // --- 修正: visual line数ベースで計算 ---
-    let editor_area_width = crate::components::middle_block::left_block::get_editor_area_width(area);
+    let editor_area_width = crate::components::middle_block::left_block::get_editor_area_width(editor_area);
     let wrap_width = if app.word_wrap_enabled {
         editor_area_width as usize
     } else {
@@ -19,7 +19,6 @@ pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
     let visual_lines = app.editor.get_visual_lines_with_width_word_wrap(wrap_width);
     let visual_lines_count = visual_lines.len() as u16;
     let viewport_height = area.height;
-
     let mut scrollbar_content: Vec<Line> = Vec::new();
 
     // テーマの背景色を取得
@@ -51,7 +50,7 @@ pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
             line_content.push('#');
         } else {
             // レール部分の色
-            line_content.push('|');
+            line_content.push(' ');
         }
         spans.push(Span::styled(
             line_content,
