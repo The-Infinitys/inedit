@@ -150,7 +150,7 @@ impl<'a> Widget for EditorWidget<'a> {
                                 let global_part_start_byte_offset = current_logical_line_byte_offset + part_to_render_byte_offset_start;
                                 let global_part_end_byte_offset = current_logical_line_byte_offset + part_to_render_byte_offset_end;
 
-                                if (global_part_start_byte_offset < sel_end_byte && global_part_end_byte_offset > sel_start_byte) {
+                                if global_part_start_byte_offset < sel_end_byte && global_part_end_byte_offset > sel_start_byte {
                                     final_style = final_style.bg(Color::Rgb(50, 50, 100));
                                 }
 
