@@ -10,8 +10,8 @@ use ratatui::{
 /// Bottom Bar を描画します。カーソル位置、行数などを表示します。
 pub fn render_bottom_bar(f: &mut Frame, area: Rect, app: &App) {
     let cursor_pos = app.editor.cursor.get_current_pos();
-    let total_lines = app.editor.lines.len();
-    let _col_count = if let Some(line) = app.editor.lines.get(cursor_pos.1 as usize) {
+    let total_lines = app.editor.buffer.lines().count();
+    let _col_count = if let Some(line) = app.editor.buffer.lines().nth(cursor_pos.1 as usize) {
         // 現在の行の論理的な文字数
         line.chars().count()
     } else {

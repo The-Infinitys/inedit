@@ -51,7 +51,7 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
 
     // Middle Block の描画前にスクロールオフセットを調整
     // ここで `editor_area_chunks[1]` (Editor Block の領域) を渡すのが適切です。
-    app.editor.adjust_viewport_offset(editor_area_chunks[1], app.word_wrap_enabled);
+    app.editor.adjust_viewport_offset(editor_area_chunks[1]);
 
     // Left Block の描画
     render_left_block(f, editor_area_chunks[0], app);

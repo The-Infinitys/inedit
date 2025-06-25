@@ -2,7 +2,7 @@ use crate::app::{App, LineStatus};
 use ratatui::{
     Frame,
     layout::{Alignment, Rect},
-    style::{Color, Modifier, Style}, // Modifierをインポート
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
@@ -21,52 +21,54 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
     let theme_bg = app.highlighter.get_background_color();
     let theme_fg = app.highlighter.get_foreground_color();
 
-    let editor_content_width = get_editor_area_width(area); // This is the width for text wrapping
-    let mut visual_line_y_counter: u16 = 0; // Global visual line counter
-    let mut drawn_lines_count: u16 = 0; // Lines drawn on screen
+    // 折返しモード対応: エディタ本体のwrap幅でvisual_linesを取得
+    let editor_area_width = get_editor_area_width(area);
+    let wrap_width = if app.word_wrap_enabled {
+        editor_area_width as usize
+    } else {
+        usize::MAX // wrapしない場合は非常に大きな値
+    };
+    let visual_lines = app.editor.get_visual_lines_with_width_word_wrap(wrap_width);
+    let total_visual_lines = visual_lines.len();
+    let start = app.editor.scroll_offset_y as usize;
+    let end = (start + area.height as usize).min(total_visual_lines);
+    let visible_lines = &visual_lines[start..end];
 
     // --- 修正: startまでに何個の論理行があったかを数える ---
     // ビューポートの先頭 visual line が属する論理行番号を計算
-    'outer: for logical_line_idx in 0..app.editor.lines.len() {
-        let wrapped_segments = app.editor.get_visual_lines_for_logical_line(
-            logical_line_idx,
-            editor_content_width, // Use the width of the editor content area for wrapping
-        );
-
-        for (wrap_idx, _segment) in wrapped_segments.iter().enumerate() {
-            if visual_line_y_counter >= app.editor.scroll_offset_visual_y {
-                let screen_y = area.y + drawn_lines_count;
-                if screen_y >= area.bottom() {
-                    break 'outer;
-                }
-
-                let mut spans: Vec<Span> = Vec::new();
-                if wrap_idx == 0 {
-                    // Only show line number and diff for the first visual line of a logical line
-                    let line_number = (logical_line_idx + 1).to_string();
-                    let line_status = app.line_statuses.get(logical_line_idx).copied().unwrap_or(LineStatus::Unchanged);
-
-                    let diff_symbol_style = match line_status {
-                        LineStatus::Modified => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
-                        LineStatus::Added => Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
-                        LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
-                    };
-                    let diff_symbol = match line_status {
-                        LineStatus::Modified => "~",
-                        LineStatus::Added => "+",
-                        LineStatus::Unchanged => " ",
-                    };
-
-                    spans.push(Span::styled(format!("{:>4}", line_number), theme_fg));
-                    spans.push(Span::styled(format!("{} ", diff_symbol), diff_symbol_style));
-                } else {
-                    // For wrapped lines, just show padding
-                    spans.push(Span::styled("      ", Style::default().fg(Color::DarkGray)));
-                }
-                lines_to_display.push(Line::from(spans));
-                drawn_lines_count += 1;
-            }
-            visual_line_y_counter += 1;
+    let mut logical_line_counter = 1;
+    if start > 0 {
+        // startまでのvisual_linesでwrap_idx==0の数を数える
+        logical_line_counter += visual_lines[..start]
+            .iter()
+            .filter(|(_, wrap_idx, _)| *wrap_idx == 0)
+            .count();
+    }
+    // 折返し1行目ごとに論理行番号をインクリメントして表示し、折返し2行目以降は空白にする
+    for (buf_idx, wrap_idx, _line_str) in visible_lines.iter() {
+        if *wrap_idx == 0 {
+            // 論理行の先頭 visual line のみ行番号を表示
+            let line_number = logical_line_counter.to_string();
+            let line_status = app.line_statuses.get(*buf_idx).copied().unwrap_or(LineStatus::Unchanged);
+            let diff_symbol_style = match line_status {
+                LineStatus::Modified => Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD),
+                LineStatus::Added => Style::default().fg(Color::Green).add_modifier(ratatui::style::Modifier::BOLD),
+                LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
+            };
+            let diff_symbol = match line_status {
+                LineStatus::Modified => "~",
+                LineStatus::Added => "+",
+                LineStatus::Unchanged => " ",
+            };
+            let line_num_span = Span::styled(format!("{:>4}", line_number), theme_fg);
+            let diff_span = Span::styled(format!("{} ", diff_symbol), diff_symbol_style);
+            lines_to_display.push(Line::from(vec![line_num_span, diff_span]));
+            logical_line_counter += 1;
+        } else {
+            // 折返し部分には行番号・差分とも空白
+            let line_num_span = Span::styled("    ", Style::default().fg(Color::DarkGray));
+            let diff_span = Span::styled("  ", Style::default().fg(Color::DarkGray));
+            lines_to_display.push(Line::from(vec![line_num_span, diff_span]));
         }
     }
     // ビューポートの高さに満たない場合は空行で埋める

@@ -1,40 +1,42 @@
 // src/app/editor.rs
 pub mod search;
 pub mod suggest;
-
 use super::cursor::Cursor;
-use arboard::Clipboard;
-use ratatui::layout::Rect; // Rectはadjust_viewport_offsetで使用するため残す
+use arboard::Clipboard; // すでにインポート済み
+use ratatui::layout::Rect;
 use std::fs;
-use unicode_width::UnicodeWidthChar; // `ch.width()`のためにインポート
 use std::io;
 use std::path::Path;
-use unicode_width::UnicodeWidthStr;
+// use unicode_width::UnicodeWidthChar; // unicode-width は使用しません
+use ratatui::text::Line as RatatuiLine; // ratatui::text::Line をエイリアスでインポート
 
 /// テキストバッファとカーソルを管理し、編集操作を提供します。
+#[derive(Default)]
 pub struct Editor {
-    pub lines: Vec<String>,
+    pub buffer: String,
     pub cursor: Cursor,
     pub search_query: String,
     pub search_matches: Vec<(u16, u16)>, // 検索結果の(y, x)位置 (文字単位)
     pub current_search_idx: Option<usize>, // 現在の検索結果のインデックス
-    pub scroll_offset_visual_y: u16, // 垂直方向のスクロールオフセット (視覚行単位)
-    pub scroll_offset_x: u16,        // 水平方向のスクロールオフセット (文字単位)
-    undo_stack: Vec<Vec<String>>,
-    redo_stack: Vec<Vec<String>>,
+    pub scroll_offset_y: u16,            // 垂直方向のスクロールオフセット (行単位)
+    pub scroll_offset_x: u16,            // 水平方向のスクロールオフセット (文字単位)
+    pub cursor_wrap_idx: usize, // 折返しインデックスを追加
+    undo_stack: Vec<String>,
+    redo_stack: Vec<String>,
 }
 
 impl Editor {
     /// 新しいエディタを作成します。
     pub fn new(initial_text: String) -> Self {
         Self {
-            lines: initial_text.lines().map(String::from).collect(),
+            buffer: initial_text,
             cursor: Cursor::new(0, 0),
             search_query: String::new(),
             search_matches: Vec::new(),
             current_search_idx: None,
-            scroll_offset_visual_y: 0,
-            scroll_offset_x: 0,
+            scroll_offset_y: 0, // 初期スクロールオフセット
+            scroll_offset_x: 0, // 初期スクロールオフセット
+            cursor_wrap_idx: 0, // 初期値
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
         }
@@ -43,12 +45,12 @@ impl Editor {
     /// 指定されたパスからテキストを読み込み、エディタバッファを設定します。
     /// （App層によって、これが元ファイルか一時ファイルかが決定されます。）
     pub fn load_from_file(&mut self, path: &Path) -> io::Result<()> {
-        let content = fs::read_to_string(path).unwrap_or_default();
-        self.lines = content.lines().map(String::from).collect();
+        let content = fs::read_to_string(path)?;
+        self.buffer = content;
         // ファイルを読み込んだら、カーソルを先頭に設定し、選択をクリア
         self.set_cursor_position(0, 0, false);
         // 新しいファイルの内容なのでスクロールオフセットもリセット
-        self.scroll_offset_visual_y = 0;
+        self.scroll_offset_y = 0;
         self.scroll_offset_x = 0;
         Ok(())
     }
@@ -56,28 +58,28 @@ impl Editor {
     /// エディタバッファの内容を指定されたパスに書き込みます。
     /// （App層によって、これが元ファイルか一時ファイルかが決定されます。）
     pub fn save_to_file(&self, path: &Path) -> io::Result<()> {
-        let content = self.lines.join("\n");
-        fs::write(path, content)
+        fs::write(path, &self.buffer)
     }
 
     /// カーソルを新しい論理位置に移動させます。
     /// バッファの境界を考慮して位置を調整し、その後Cursorの状態を更新します。
     /// `extend_selection`が`true`の場合、選択範囲を維持または開始します。
     pub fn set_cursor_position(&mut self, x: u16, y: u16, extend_selection: bool) {
-        let num_lines = self.lines.len();
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        let num_lines = lines.len();
 
         let mut final_y = y;
         // Y座標をバッファの行数内にクランプ
         if num_lines == 0 {
             final_y = 0;
         } else {
-            final_y = final_y.min(num_lines.saturating_sub(1) as u16);
+            final_y = final_y.min((num_lines - 1) as u16);
         }
 
         let mut final_x = x;
         // X座標を現在の行の文字数内にクランプ
         if num_lines > 0 {
-            let current_line_len = self.lines[final_y as usize].chars().count() as u16;
+            let current_line_len = lines[final_y as usize].chars().count() as u16;
             // `u16::MAX`が渡された場合は行末に設定
             if x == u16::MAX {
                 final_x = current_line_len;
@@ -98,67 +100,86 @@ impl Editor {
 
     /// 描画領域のサイズに基づいてスクロールオフセットを調整し、カーソルが見えるようにします。
     ///
-    /// `word_wrap_enabled` の状態を考慮します。
-    pub fn adjust_viewport_offset(&mut self, viewport_area: Rect, word_wrap_enabled: bool) {
+    /// **重要:** このメソッドは`scroll_offset_y`と`scroll_offset_x`を設定します。
+    /// 実際の描画を行う際は、`scroll_offset_y`から始まり、`scroll_offset_y + viewport_area.height`までの行を描画するのではなく、
+    /// 必ず `self.buffer.lines().count()`（バッファの実際の行数）を超えないようにしてください。
+    /// 例えば、`for i in self.scroll_offset_y .. min(self.scroll_offset_y + viewport_area.height, self.buffer.lines().count() as u16)`
+    /// のようにループの終端を制限することで、存在しない行が表示されるのを防ぐことができます。
+    pub fn adjust_viewport_offset(&mut self, viewport_area: Rect) {
+        let cursor_y = self.cursor.y;
+        let cursor_x_logical = self.cursor.x; // 論理的な文字インデックス
         let viewport_height = viewport_area.height;
         let viewport_width = viewport_area.width;
 
-        let (cursor_visual_x, cursor_visual_y) =
-            self.logical_to_visual_pos(self.cursor.get_current_pos(), viewport_width, word_wrap_enabled);
+        const PADDING_Y: u16 = 3; // 垂直方向のパディング
+        const PADDING_X: u16 = 5; // 水平方向のパディング
 
-        // 垂直スクロール (Y軸 - 視覚行)
-        if cursor_visual_y < self.scroll_offset_visual_y {
-            self.scroll_offset_visual_y = cursor_visual_y;
+        // 垂直スクロール (Y軸)
+        // カーソルが上端に近づいた場合
+        if cursor_y < self.scroll_offset_y + PADDING_Y {
+            self.scroll_offset_y = cursor_y.saturating_sub(PADDING_Y);
         }
-        if cursor_visual_y >= self.scroll_offset_visual_y + viewport_height {
-            self.scroll_offset_visual_y = cursor_visual_y - viewport_height + 1;
+        // カーソルが下端に近づいた場合
+        if cursor_y >= self.scroll_offset_y + viewport_height.saturating_sub(PADDING_Y) {
+            self.scroll_offset_y = cursor_y
+                .saturating_add(1)
+                .saturating_sub(viewport_height)
+                .saturating_add(PADDING_Y);
         }
 
-        // 水平スクロール (X軸 - 視覚列)
-        if word_wrap_enabled {
-            self.scroll_offset_x = 0;
+        // 水平スクロール (X軸) - 行の長さとUnicode幅も考慮
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        let current_line_content = if (cursor_y as usize) < lines.len() {
+            lines[cursor_y as usize]
         } else {
-            if cursor_visual_x < self.scroll_offset_x {
-                self.scroll_offset_x = cursor_visual_x;
-            }
-            if cursor_visual_x >= self.scroll_offset_x + viewport_width {
-                self.scroll_offset_x = cursor_visual_x - viewport_width + 1;
-            }
-        }
-    }
+            ""
+        };
 
-    /// カーソルを次の視覚行に移動します。
-    pub fn next_visual_line(&mut self, viewport_width: u16, word_wrap_enabled: bool, extend_selection: bool) {
-        if !word_wrap_enabled {
-            self.next_line(extend_selection);
-            return;
-        }
+        // カーソルの論理X位置 (cursor_x_logical) までの部分文字列の視覚的な幅（セル数）を計算
+        let visual_cursor_x_on_line = RatatuiLine::from(
+            current_line_content
+                .chars()
+                .take(cursor_x_logical as usize)
+                .collect::<String>(),
+        )
+        .width() as u16;
 
-        let (current_visual_x, current_visual_y) =
-            self.logical_to_visual_pos(self.cursor.get_current_pos(), viewport_width, true);
+        // 現在の行の全幅も計算（スクロール範囲の調整用）
+        let current_line_visual_width = RatatuiLine::from(current_line_content).width() as u16;
 
-        let (new_logical_x, new_logical_y) =
-            self.visual_to_logical_pos((current_visual_x, current_visual_y + 1), viewport_width);
-
-        self.set_cursor_position(new_logical_x, new_logical_y, extend_selection);
-    }
-
-    /// カーソルを前の視覚行に移動します。
-    pub fn previous_visual_line(&mut self, viewport_width: u16, word_wrap_enabled: bool, extend_selection: bool) {
-        if !word_wrap_enabled {
-            self.previous_line(extend_selection);
-            return;
+        if visual_cursor_x_on_line < self.scroll_offset_x + PADDING_X {
+            // カーソルがビューポートの左端より左に移動した場合
+            self.scroll_offset_x = visual_cursor_x_on_line.saturating_sub(PADDING_X);
+        } else if visual_cursor_x_on_line
+            >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X)
+        {
+            // カーソルがビューポートの右端より右に移動した場合
+            // カーソル自体を含めるため、少なくとも1セル分動かすことを考慮（正確な幅はParagraphが計算する）
+            self.scroll_offset_x = visual_cursor_x_on_line
+                .saturating_add(1)
+                .saturating_sub(viewport_width)
+                .saturating_add(PADDING_X);
         }
 
-        let (current_visual_x, current_visual_y) =
-            self.logical_to_visual_pos(self.cursor.get_current_pos(), viewport_width, true);
+        // スクロールオフセットがマイナスにならないように、またバッファの範囲を超えないように調整
+        let total_lines = self.buffer.lines().count() as u16;
+        if total_lines > viewport_height {
+            self.scroll_offset_y = self
+                .scroll_offset_y
+                .min(total_lines.saturating_sub(viewport_height));
+        } else {
+            self.scroll_offset_y = 0; // コンテンツがビューポートより短い場合、垂直スクロールは不要
+        }
 
-        if current_visual_y == 0 { return; }
+        if current_line_visual_width > viewport_width {
+            self.scroll_offset_x = self
+                .scroll_offset_x
+                .min(current_line_visual_width.saturating_sub(viewport_width));
+        } else {
+            self.scroll_offset_x = 0; // 現在の行がビューポートより短い場合、水平スクロールは不要
+        }
 
-        let (new_logical_x, new_logical_y) =
-            self.visual_to_logical_pos((current_visual_x, current_visual_y.saturating_sub(1)), viewport_width);
-
-        self.set_cursor_position(new_logical_x, new_logical_y, extend_selection);
+        // スクロールオフセットは常に0以上であることを保証
     }
 
     /// カーソルを次の行に移動します。
@@ -177,20 +198,22 @@ impl Editor {
 
     /// カーソルを次の文字に移動します。
     pub fn next_char(&mut self, extend_selection: bool) {
+        let lines: Vec<&str> = self.buffer.lines().collect();
         let current_y = self.cursor.y;
         let current_x = self.cursor.x;
 
-        if (current_y as usize) < self.lines.len() {
-            let current_line_len = self.lines[current_y as usize].chars().count() as u16;
+        if (current_y as usize) < lines.len() {
+            let current_line_len = lines[current_y as usize].chars().count() as u16;
             if current_x < current_line_len {
                 // 現在の行内で次の文字へ
                 self.set_cursor_position(current_x.saturating_add(1), current_y, extend_selection);
-            } else if (current_y as usize + 1) < self.lines.len() {
+            } else if (current_y as usize + 1) < lines.len() {
                 // 次の行が存在する場合
                 // 行末にいる場合は次の行の先頭へ
                 self.set_cursor_position(0, current_y.saturating_add(1), extend_selection);
             } else {
                 // バッファの最後の行の末尾にいる場合は何もしない
+                self.set_cursor_position(current_x, current_y, extend_selection); // 現在の位置を再設定（実質何もしない）
             }
         } else {
             // バッファが空または最後の行の末尾（カーソルがその行を超えている）にいる場合は何もしない
@@ -213,6 +236,7 @@ impl Editor {
             self.set_cursor_position(u16::MAX, previous_line_y, extend_selection);
         } else {
             // バッファが空または最初の行の先頭にいる場合は何もしない
+            self.set_cursor_position(current_x, current_y, extend_selection); // 現在の位置を再設定（実質何もしない）
         }
     }
 
@@ -258,7 +282,7 @@ impl Editor {
             // (y, x) 座標をバイトオフセットに変換するヘルパー関数
             let coords_to_byte_offset = |y_coord: u16, x_coord: u16| -> usize {
                 let mut offset = 0;
-                for (i, line) in self.lines.iter().enumerate() {
+                for (i, line) in self.buffer.lines().enumerate() {
                     if i == y_coord as usize {
                         // 指定された行と列の文字オフセットまでのバイト数を計算
                         offset += line
@@ -300,8 +324,7 @@ impl Editor {
     /// クリップボードが利用可能ならOSクリップボードにも書き込む
     pub fn copy_selection(&mut self) -> Option<String> {
         if let Some((start, end)) = self.get_selection_range() {
-            let buffer_as_string = self.lines.join("\n");
-            let text = buffer_as_string[start..end].to_string();
+            let text = self.buffer[start..end].to_string();
             // OSクリップボードに書き込む（失敗しても無視）
             if let Ok(mut clipboard) = Clipboard::new() {
                 let _ = clipboard.set_text(text.clone());
@@ -316,8 +339,7 @@ impl Editor {
     /// クリップボードが利用可能ならOSクリップボードにも書き込む
     pub fn cut_selection(&mut self) -> Option<String> {
         if let Some((start_byte_offset, end_byte_offset)) = self.get_selection_range() {
-            let buffer_as_string = self.lines.join("\n");
-            let cut_text = buffer_as_string[start_byte_offset..end_byte_offset].to_string();
+            let cut_text = self.buffer[start_byte_offset..end_byte_offset].to_string();
 
             // OSクリップボードに書き込む（失敗しても無視）
             if let Ok(mut clipboard) = Clipboard::new() {
@@ -326,13 +348,20 @@ impl Editor {
 
             // 切り取り後のカーソル位置を、選択範囲の開始位置に調整する
             // バイトオフセットから新しいカーソル座標を計算
-            let (start_y, start_x) = self.cursor.get_normalized_selection_coords().unwrap().0;
-            let (new_x, new_y) = (start_x, start_y);
+            let lines_before_cut: Vec<&str> = self.buffer[..start_byte_offset].lines().collect();
+            let new_y = (lines_before_cut.len() as u16).saturating_sub(1); // 切り取り開始行
+            let new_x = if new_y == u16::MAX {
+                // バッファの先頭で切り取りの場合
+                0
+            } else {
+                lines_before_cut
+                    .last()
+                    .map_or(0, |last_line| last_line.chars().count() as u16)
+            };
 
-            // 選択範囲を削除
-            let mut temp_buffer = buffer_as_string;
-            temp_buffer.replace_range(start_byte_offset..end_byte_offset, "");
-            self.lines = temp_buffer.lines().map(String::from).collect();
+            self.buffer
+                .replace_range(start_byte_offset..end_byte_offset, ""); // 選択範囲を削除
+
             // カーソル位置を切り取った後の位置に設定し、選択を解除
             self.set_cursor_position(new_x, new_y, false);
             Some(cut_text)
@@ -348,9 +377,8 @@ impl Editor {
         }
 
         let current_offset = self.get_cursor_byte_offset(); // 現在のカーソル位置のバイトオフセット
-        let mut buffer_as_string = self.lines.join("\n");
-        buffer_as_string.insert_str(current_offset, text);
-        self.lines = buffer_as_string.lines().map(String::from).collect();
+        self.buffer.insert_str(current_offset, text); // テキストを挿入
+
         let new_cursor_offset = current_offset + text.len(); // 新しいカーソル位置のバイトオフセット
         self.set_cursor_from_byte_offset(new_cursor_offset, false); // カーソル位置を更新し、選択を解除
     }
@@ -377,17 +405,13 @@ impl Editor {
             self.cut_selection(); // 選択範囲がある場合はまず切り取る
         }
 
-        let (x, y) = (self.cursor.x as usize, self.cursor.y as usize);
+        let current_offset = self.get_cursor_byte_offset(); // 現在のカーソル位置のバイトオフセット
+        self.buffer.insert(current_offset, c); // 文字を挿入
+
+        // カーソル位置を更新（改行の場合は次の行の先頭、それ以外はX座標を1進める）
         if c == '\n' {
-            let current_line = &mut self.lines[y];
-            let rest_of_line = current_line.split_off(x);
-            self.lines.insert(y + 1, rest_of_line);
             self.set_cursor_position(0, self.cursor.y.saturating_add(1), false);
         } else {
-            if y >= self.lines.len() {
-                self.lines.push(String::new());
-            }
-            self.lines[y].insert(x, c);
             self.set_cursor_position(self.cursor.x.saturating_add(1), self.cursor.y, false);
         }
     }
@@ -399,17 +423,20 @@ impl Editor {
             return;
         }
 
-        let (x, y) = (self.cursor.x as usize, self.cursor.y as usize);
-
-        if x > 0 {
-            self.lines[y].remove(x - 1);
-            self.set_cursor_position(self.cursor.x - 1, self.cursor.y, false);
-        } else if y > 0 {
-            // 行頭でバックスペース、前の行と結合
-            let current_line = self.lines.remove(y);
-            let prev_line_len = self.lines[y - 1].len() as u16;
-            self.lines[y - 1].push_str(&current_line);
-            self.set_cursor_position(prev_line_len, self.cursor.y - 1, false);
+        let current_offset = self.get_cursor_byte_offset(); // 現在のカーソル位置のバイトオフセット
+        if current_offset > 0 {
+            // 文字の境界を考慮して、前の文字のバイト開始位置を特定
+            let mut char_start_offset = current_offset;
+            // マルチバイト文字の途中にカーソルがある場合は、文字の先頭まで戻る
+            while char_start_offset > 0 && !self.buffer.is_char_boundary(char_start_offset - 1) {
+                char_start_offset -= 1;
+            }
+            if char_start_offset > 0 {
+                // 前の文字（char_start_offset - 1 から始まる文字）を削除
+                self.buffer.remove(char_start_offset - 1);
+                // カーソル位置を新しい位置に調整（選択はクリア）
+                self.set_cursor_from_byte_offset(char_start_offset - 1, false);
+            }
         }
     }
 
@@ -420,14 +447,31 @@ impl Editor {
             return;
         }
 
-        let (x, y) = (self.cursor.x as usize, self.cursor.y as usize);
+        let current_offset = self.get_cursor_byte_offset(); // 現在のカーソル位置のバイトオフセット
+        if current_offset < self.buffer.len() {
+            // 現在のカーソル位置から次の文字のバイト終了位置を特定
+            let mut char_start_for_deletion = current_offset;
+            // マルチバイト文字の途中にカーソルがある場合は、文字の先頭まで進む
+            while char_start_for_deletion < self.buffer.len()
+                && !self.buffer.is_char_boundary(char_start_for_deletion)
+            {
+                char_start_for_deletion += 1;
+            }
 
-        if y < self.lines.len() && x < self.lines[y].len() {
-            self.lines[y].remove(x);
-        } else if y + 1 < self.lines.len() {
-            // 行末でデリート、次の行と結合
-            let next_line = self.lines.remove(y + 1);
-            self.lines[y].push_str(&next_line);
+            // `chars().next()` を使って現在のカーソル位置の文字（または次の文字）のバイト長を取得
+            let char_len_to_delete = self.buffer[char_start_for_deletion..]
+                .chars()
+                .next()
+                .map_or(0, |c| c.len_utf8());
+
+            if char_len_to_delete > 0 {
+                self.buffer.replace_range(
+                    char_start_for_deletion..(char_start_for_deletion + char_len_to_delete),
+                    "",
+                );
+                // Deleteキーの場合、カーソル位置は変更しない（選択はクリア）
+                self.set_cursor_position(self.cursor.x, self.cursor.y, false);
+            }
         }
     }
 
@@ -438,11 +482,9 @@ impl Editor {
         end_byte_offset: usize,
         new_text: &str,
     ) {
-        let mut buffer_as_string = self.lines.join("\n");
-        if start_byte_offset <= end_byte_offset && end_byte_offset <= buffer_as_string.len() {
-            buffer_as_string.replace_range(start_byte_offset..end_byte_offset, new_text);
-            self.lines = buffer_as_string.lines().map(String::from).collect();
-
+        if start_byte_offset <= end_byte_offset && end_byte_offset <= self.buffer.len() {
+            self.buffer
+                .replace_range(start_byte_offset..end_byte_offset, new_text);
             let new_cursor_offset = start_byte_offset + new_text.len(); // 置換後の新しいカーソル位置
             self.set_cursor_from_byte_offset(new_cursor_offset, false); // カーソル位置を更新し、選択をクリア
         }
@@ -451,7 +493,7 @@ impl Editor {
     /// 現在のカーソル位置をバイトオフセットに変換します。
     fn get_cursor_byte_offset(&self) -> usize {
         let mut offset = 0;
-        for (current_y, line) in self.lines.iter().enumerate() {
+        for (current_y, line) in self.buffer.lines().enumerate() {
             if current_y == self.cursor.y as usize {
                 // 現在の行のカーソルX位置までのバイト数を計算
                 offset += line
@@ -473,8 +515,7 @@ impl Editor {
         let mut y = 0;
         let mut x_chars_count = 0;
 
-        let buffer_as_string = self.lines.join("\n");
-        for line in buffer_as_string.lines() {
+        for line in self.buffer.lines() {
             let line_len_bytes = line.len();
             // 改行文字を含む行の全長。Rustのlines()は改行を含まないので、ここで+1する
             let line_with_newline_len = line_len_bytes + 1; // LFを仮定
@@ -510,14 +551,15 @@ impl Editor {
     /// カーソル位置の括弧に対応する括弧の位置を検索します。
     /// 戻り値は (y, x) のタプルです。
     pub fn find_matching_paren(&self) -> Option<(u16, u16)> {
+        let lines: Vec<&str> = self.buffer.lines().collect();
         let current_y = self.cursor.y as usize;
         let current_x = self.cursor.x as usize;
 
-        if current_y >= self.lines.len() {
+        if current_y >= lines.len() {
             return None;
         }
 
-        let current_line_chars: Vec<char> = self.lines[current_y].chars().collect();
+        let current_line_chars: Vec<char> = lines[current_y].chars().collect();
         // カーソルが現在の行の文字数の境界にいる場合も考慮
         if current_x > current_line_chars.len() {
             return None;
@@ -558,8 +600,8 @@ impl Editor {
                 }
             }
             // 後続の行
-            for (y_idx, _item) in self.lines.iter().enumerate().skip(current_y + 1) {
-                let line_chars: Vec<char> = self.lines[y_idx].chars().collect();
+            for (y_idx, _item) in lines.iter().enumerate().skip(current_y + 1) {
+                let line_chars: Vec<char> = lines[y_idx].chars().collect();
                 for (x_idx, ch) in line_chars.iter().enumerate() {
                     if *ch == open_paren {
                         balance += 1;
@@ -593,7 +635,7 @@ impl Editor {
             }
             // 前の行
             for y_idx in (0..current_y).rev() {
-                let line_chars: Vec<char> = self.lines[y_idx].chars().collect();
+                let line_chars: Vec<char> = lines[y_idx].chars().collect();
                 for x_idx in (0..line_chars.len()).rev() {
                     let ch = line_chars[x_idx];
                     if ch == close_paren {
@@ -614,13 +656,14 @@ impl Editor {
     /// 実際の補完は、言語サーバープロトコル (LSP) などで行われるのが一般的です。
     pub fn get_completion_suggestions(&self) -> Vec<String> {
         let mut suggestions = Vec::new();
+        let lines: Vec<&str> = self.buffer.lines().collect();
         let current_y = self.cursor.y as usize;
 
-        if current_y >= self.lines.len() {
+        if current_y >= lines.len() {
             return suggestions;
         }
 
-        let current_line_chars: Vec<char> = self.lines[current_y].chars().collect();
+        let current_line_chars: Vec<char> = lines[current_y].chars().collect();
         let current_x = self.cursor.x as usize;
 
         // カーソル前の単語を取得
@@ -649,7 +692,7 @@ impl Editor {
 
         // 仮の識別子リスト (バッファ内の単語から取得)
         let mut identifiers: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for line_str in self.lines.iter() {
+        for line_str in self.buffer.lines() {
             // 英数字とアンダースコア以外の文字で単語を分割
             for word in line_str.split(|c: char| !(c.is_alphanumeric() || c == '_')) {
                 if !word.is_empty() && !keywords.contains(&word) {
@@ -688,7 +731,7 @@ impl Editor {
         }
 
         // 全ての行を走査し、クエリにマッチする位置を収集
-        for (y, line) in self.lines.iter().enumerate() {
+        for (y, line) in self.buffer.lines().enumerate() {
             // `match_indices` はバイトオフセットを返すため、文字オフセットに変換が必要
             for (byte_x, _) in line.match_indices(query) {
                 // バイトオフセットから文字オフセットに変換
@@ -774,8 +817,7 @@ impl Editor {
 
     pub fn copy_selection_to_clipboard(&mut self) -> Option<String> {
         if let Some((start, end)) = self.get_selection_range() {
-            let buffer_as_string = self.lines.join("\n");
-            let text = buffer_as_string[start..end].to_string();
+            let text = self.buffer[start..end].to_string();
             let mut clipboard = Clipboard::new().ok();
             if let Some(ref mut cb) = clipboard {
                 let _ = cb.set_text(text.clone());
@@ -786,100 +828,262 @@ impl Editor {
         }
     }
 
+    /// app.clipboardから貼り付ける（OSクリップボードは参照しない）
+    // pub fn paste_from_clipboard(&mut self, clipboard: &Option<String>) {
+    //     // OSクリップボードが利用可能ならそちらを優先
+    //     if let Ok(mut sys_clip) = Clipboard::new() {
+    //         if let Ok(text) = sys_clip.get_text() {
+    //             self.paste_text(&text);
+    //             return;
+    //         }
+    //     }
+    //     // 失敗した場合はapp.clipboardを使う
+    //     if let Some(text) = clipboard {
+    //         self.paste_text(text);
+    //     }
+    // }
+
     /// 編集操作の前に呼び出して履歴を積む
     fn push_undo(&mut self) {
-        self.undo_stack.push(self.lines.clone());
+        self.undo_stack.push(self.buffer.clone());
         self.redo_stack.clear();
     }
 
     pub fn undo(&mut self) {
         if let Some(prev) = self.undo_stack.pop() {
-            self.redo_stack.push(self.lines.clone());
-            self.lines = prev;
+            self.redo_stack.push(self.buffer.clone());
+            self.buffer = prev;
             // カーソル位置も復元したい場合は別途保存が必要
         }
     }
 
     pub fn redo(&mut self) {
         if let Some(next) = self.redo_stack.pop() {
-            self.undo_stack.push(self.lines.clone());
-            self.lines = next;
+            self.undo_stack.push(self.buffer.clone());
+            self.buffer = next;
         }
     }
 
-    /// 論理カーソル位置を視覚的な位置に変換します。
-    pub fn logical_to_visual_pos(&self, logical_pos: (u16, u16), wrap_width: u16, word_wrap_enabled: bool) -> (u16, u16) {
-        let (logical_x, logical_y) = logical_pos;
-
-        if !word_wrap_enabled || wrap_width == 0 {
-            let visual_x = self.lines.get(logical_y as usize).map_or(0, |line| {
-                line.chars().take(logical_x as usize).collect::<String>().width() as u16
-            });
-            return (visual_x, logical_y);
-        }
-
-        let mut visual_y_offset = 0;
-        for i in 0..logical_y as usize {
-            visual_y_offset += self.get_visual_lines_for_logical_line(i, wrap_width).len() as u16;
-        }
-
-        let wrapped_lines = self.get_visual_lines_for_logical_line(logical_y as usize, wrap_width);
-        let mut chars_seen = 0;
-        for (wrap_idx, line_segment) in wrapped_lines.iter().enumerate() {
-            let segment_len = line_segment.chars().count();
-            if logical_x as usize <= chars_seen + segment_len {
-                let x_in_segment = logical_x as usize - chars_seen;
-                let visual_x = line_segment.chars().take(x_in_segment).collect::<String>().width() as u16;
-                return (visual_x, visual_y_offset + wrap_idx as u16);
+    /// 折返しモード用: ビューポート高さに合わせた画面上の行リストを返す
+    /// 戻り値は (バッファ行番号, 折返しインデックス, 画面行文字列)
+    pub fn get_visual_lines(&self) -> Vec<(usize, usize, String)> {
+        let mut result = Vec::new();
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        // 仮: 1画面行=40文字で折返し（本来はエディタ幅を引数で受けるべき）
+        let wrap_width = 40;
+        for (buf_idx, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                result.push((buf_idx, 0, String::new()));
+                continue;
             }
-            chars_seen += segment_len;
+            let mut start = 0;
+            let mut wrap_idx = 0;
+            let chars: Vec<char> = line.chars().collect();
+            while start < chars.len() {
+                let end = (start + wrap_width).min(chars.len());
+                let visual = chars[start..end].iter().collect::<String>();
+                result.push((buf_idx, wrap_idx, visual));
+                start = end;
+                wrap_idx += 1;
+            }
         }
-
-        // カーソルが行末にある場合
-        let last_segment_width = wrapped_lines.last().map_or(0, |s| s.width() as u16);
-        (last_segment_width, visual_y_offset + wrapped_lines.len().saturating_sub(1) as u16)
+        result
     }
-
-    /// 視覚的な位置を論理カーソル位置に変換します。
-    pub fn visual_to_logical_pos(&self, visual_pos: (u16, u16), wrap_width: u16) -> (u16, u16) {
-        let (visual_x, visual_y) = visual_pos;
-        let mut current_visual_y: u16 = 0;
-
-        for logical_y in 0..self.lines.len() {
-            let wrapped_lines = self.get_visual_lines_for_logical_line(logical_y, wrap_width);
-            if visual_y < current_visual_y + wrapped_lines.len() as u16 {
-                let wrap_idx = (visual_y - current_visual_y) as usize;
-                let line_segment = &wrapped_lines[wrap_idx];
-
-                let mut logical_x_offset = 0;
-                for i in 0..wrap_idx {
-                    logical_x_offset += wrapped_lines[i].chars().count();
+    /// 折返しモード対応: wrap行単位でカーソルを上下移動
+    pub fn next_visual_line(&mut self, area_width: usize, extend_selection: bool) {
+        let visual_lines = self.get_visual_lines_with_width(area_width);
+        let mut found = None;
+        for (i, (buf_idx, wrap_idx, _)) in visual_lines.iter().enumerate() {
+            if *buf_idx == self.cursor.y as usize && *wrap_idx == self.cursor_wrap_idx {
+                found = Some(i);
+                break;
+            }
+        }
+        if let Some(i) = found {
+            if i + 1 < visual_lines.len() {
+                let (next_buf_idx, next_wrap_idx, next_line) = &visual_lines[i + 1];
+                let x = self.cursor.x.min(next_line.chars().count() as u16);
+                self.cursor.x = x;
+                self.cursor.y = *next_buf_idx as u16;
+                self.cursor_wrap_idx = *next_wrap_idx;
+                self.cursor.update_position(x, *next_buf_idx as u16, extend_selection);
+            }
+        }
+    }
+    pub fn previous_visual_line(&mut self, area_width: usize, extend_selection: bool) {
+        let visual_lines = self.get_visual_lines_with_width(area_width);
+        let mut found = None;
+        for (i, (buf_idx, wrap_idx, _)) in visual_lines.iter().enumerate() {
+            if *buf_idx == self.cursor.y as usize && *wrap_idx == self.cursor_wrap_idx {
+                found = Some(i);
+                break;
+            }
+        }
+        if let Some(i) = found {
+            if i > 0 {
+                let (prev_buf_idx, prev_wrap_idx, prev_line) = &visual_lines[i - 1];
+                let x = self.cursor.x.min(prev_line.chars().count() as u16);
+                self.cursor.x = x;
+                self.cursor.y = *prev_buf_idx as u16;
+                self.cursor_wrap_idx = *prev_wrap_idx;
+                self.cursor.update_position(x, *prev_buf_idx as u16, extend_selection);
+            }
+        }
+    }
+    /// 指定幅でwrapしたvisual linesを返す（インデント保持）
+    pub fn get_visual_lines_with_width(&self, wrap_width: usize) -> Vec<(usize, usize, String)> {
+        let mut result = Vec::new();
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        for (buf_idx, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                result.push((buf_idx, 0, String::new()));
+                continue;
+            }
+            // インデント部分を抽出
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            let mut start = 0;
+            let mut wrap_idx = 0;
+            let chars: Vec<char> = line.chars().collect();
+            while start < chars.len() {
+                let is_first = wrap_idx == 0;
+                let available_width = if is_first || wrap_width == usize::MAX {
+                    wrap_width
+                } else {
+                    wrap_width.saturating_sub(indent.chars().count())
+                };
+                let end = if available_width == 0 || available_width == usize::MAX {
+                    chars.len()
+                } else {
+                    (start + available_width).min(chars.len())
+                };
+                let mut visual = chars[start..end].iter().collect::<String>();
+                if !is_first && !indent.is_empty() {
+                    visual = format!("{}{}", indent, visual);
                 }
-
-                let mut current_visual_width = 0;
-                for (char_idx, ch) in line_segment.chars().enumerate() {
-                    let char_width = ch.width().unwrap_or(1) as u16;
-                    if current_visual_width + char_width > visual_x {
-                        return ((logical_x_offset + char_idx) as u16, logical_y as u16);
+                result.push((buf_idx, wrap_idx, visual));
+                if end == chars.len() { break; }
+                start = end;
+                wrap_idx += 1;
+            }
+        }
+        result
+    }
+    /// 指定幅でwrapしたvisual linesを返す（インデント保持、単語単位wrap）
+    pub fn get_visual_lines_with_width_word_wrap(&self, wrap_width: usize) -> Vec<(usize, usize, String)> {
+        let mut result = Vec::new();
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        for (buf_idx, line) in lines.iter().enumerate() {
+            if line.is_empty() {
+                result.push((buf_idx, 0, String::new()));
+                continue;
+            }
+            // インデント部分を抽出
+            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            let mut wrap_idx = 0;
+            let mut current = 0;
+            let chars: Vec<char> = line.chars().collect();
+            let mut first = true;
+            while current < chars.len() {
+                let available_width = if first || wrap_width == usize::MAX {
+                    wrap_width
+                } else {
+                    wrap_width.saturating_sub(indent.chars().count())
+                };
+                if available_width == 0 || available_width == usize::MAX {
+                    let visual = chars[current..].iter().collect::<String>();
+                    result.push((buf_idx, wrap_idx, if first { visual.clone() } else { format!("{}{}", indent, visual) }));
+                    break;
+                }
+                // 単語単位でwrap
+                let mut end = current + available_width;
+                if end >= chars.len() {
+                    end = chars.len();
+                } else {
+                    // 途中で単語が切れる場合、直前の空白まで戻す
+                    let mut back = end;
+                    while back > current && !chars[back-1].is_whitespace() {
+                        back -= 1;
                     }
-                    current_visual_width += char_width;
+                    if back > current {
+                        end = back;
+                      }
                 }
-                return ((logical_x_offset + line_segment.chars().count()) as u16, logical_y as u16);
+                if end == current {
+                    // 1単語がwrap幅を超える場合は強制分割
+                    end = (current + wrap_width).min(chars.len());
+                }
+                let mut visual = chars[current..end].iter().collect::<String>();
+                if !first && !indent.is_empty() {
+                    visual = format!("{}{}", indent, visual);
+                }
+                result.push((buf_idx, wrap_idx, visual));
+                if end == chars.len() { break; }
+                current = end;
+                wrap_idx += 1;
+                first = false;
             }
-            current_visual_y += wrapped_lines.len() as u16;
         }
-        (0, self.lines.len().saturating_sub(1) as u16)
+        result
     }
 
-    /// 1つの論理行を折り返した結果の視覚行のリストを返します。
-    pub fn get_visual_lines_for_logical_line(&self, line_idx: usize, wrap_width: u16) -> Vec<String> {
-        let line = match self.lines.get(line_idx) {
-            Some(l) => l,
-            None => return vec![String::new()],
-        };
-        if wrap_width == 0 || line.width() <= wrap_width as usize {
-            return vec![line.clone()];
+    /// 指定したvisual lineのグローバルバイトオフセットを返す（word wrap対応）
+    pub fn get_visual_line_global_offset(&self, buf_idx: usize, wrap_idx: usize, wrap_width: usize) -> usize {
+        let lines: Vec<&str> = self.buffer.lines().collect();
+        if buf_idx >= lines.len() { return 0; }
+        let mut offset = 0;
+        // buf_idxまでの全行のバイト数+改行
+        for i in 0..buf_idx {
+            offset += lines[i].len();
+            offset += 1; // 改行
         }
-        textwrap::wrap(line, wrap_width as usize).into_iter().map(|s| s.into_owned()).collect()
+        // wrap_idx分だけこの行の先頭からバイト数を加算
+        let line = lines[buf_idx];
+        let chars: Vec<char> = line.chars().collect();
+        let mut current = 0;
+        let mut widx = 0;
+        let indent_len = line.chars().take_while(|c| c.is_whitespace()).count();
+        while widx < wrap_idx && current < chars.len() {
+            let available_width = if widx == 0 || wrap_width == usize::MAX {
+                wrap_width
+            } else {
+                wrap_width.saturating_sub(indent_len)
+            };
+            let mut end = current + available_width;
+            if end >= chars.len() {
+                end = chars.len();
+            } else {
+                let mut back = end;
+                while back > current && !chars[back-1].is_whitespace() {
+                    back -= 1;
+                }
+                if back > current {
+                    end = back;
+                }
+            }
+            if end == current {
+                end = (current + available_width).min(chars.len());
+            }
+            for c in &chars[current..end] {
+                offset += c.len_utf8();
+            }
+            current = end;
+            widx += 1;
+        }
+        offset
+    }
+
+    /// 現在のカーソル位置がvisual_linesの何番目か、その中で何文字目かを返す（word wrap対応）
+    pub fn get_cursor_visual_position(&self, wrap_width: usize) -> (usize, usize) {
+        let visual_lines = self.get_visual_lines_with_width_word_wrap(wrap_width);
+        for (i, (buf_idx, wrap_idx, line_str)) in visual_lines.iter().enumerate() {
+            if *buf_idx == self.cursor.y as usize && *wrap_idx == self.cursor_wrap_idx {
+                // カーソルのxはwrap_idx区間内での相対位置
+                let indent_len = line_str.chars().take_while(|c| c.is_whitespace()).count();
+                let start = if *wrap_idx == 0 { 0 } else { indent_len };
+                let rel_x = self.cursor.x.saturating_sub(start as u16) as usize;
+                return (i, rel_x.min(line_str.chars().count()));
+            }
+        }
+        (0, 0)
     }
 }
