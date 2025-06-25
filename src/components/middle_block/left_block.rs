@@ -16,23 +16,20 @@ pub fn get_editor_area_width(area: Rect) -> u16 {
 }
 
 /// Left Block を描画します。行番号と差分を表示します。
-pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
+pub fn render_left_block(f: &mut Frame, area: Rect, editor_area: Rect, app: &App) {
     let mut lines_to_display: Vec<Line> = Vec::new();
     let theme_bg = app.highlighter.get_background_color();
     let theme_fg = app.highlighter.get_foreground_color();
 
     // 折返しモード対応: エディタ本体のwrap幅でvisual_linesを取得
-    let editor_area_width = get_editor_area_width(area);
+    let editor_area_width = get_editor_area_width(editor_area);
     let wrap_width = if app.word_wrap_enabled {
         editor_area_width as usize
     } else {
         usize::MAX // wrapしない場合は非常に大きな値
     };
     let visual_lines = app.editor.get_visual_lines_with_width_word_wrap(wrap_width);
-    let total_visual_lines = visual_lines.len();
     let start = app.editor.scroll_offset_y as usize;
-    let end = (start + area.height as usize).min(total_visual_lines);
-    let visible_lines = &visual_lines[start..end];
 
     // --- 修正: startまでに何個の論理行があったかを数える ---
     // ビューポートの先頭 visual line が属する論理行番号を計算
@@ -45,14 +42,22 @@ pub fn render_left_block(f: &mut Frame, area: Rect, app: &App) {
             .count();
     }
     // 折返し1行目ごとに論理行番号をインクリメントして表示し、折返し2行目以降は空白にする
-    for (buf_idx, wrap_idx, _line_str) in visible_lines.iter() {
-        if *wrap_idx == 0 {
+    for (buf_idx, wrap_idx, _line_str) in visual_lines {
+        if wrap_idx == 0 {
             // 論理行の先頭 visual line のみ行番号を表示
             let line_number = logical_line_counter.to_string();
-            let line_status = app.line_statuses.get(*buf_idx).copied().unwrap_or(LineStatus::Unchanged);
+            let line_status = app
+                .line_statuses
+                .get(buf_idx)
+                .copied()
+                .unwrap_or(LineStatus::Unchanged);
             let diff_symbol_style = match line_status {
-                LineStatus::Modified => Style::default().fg(Color::Yellow).add_modifier(ratatui::style::Modifier::BOLD),
-                LineStatus::Added => Style::default().fg(Color::Green).add_modifier(ratatui::style::Modifier::BOLD),
+                LineStatus::Modified => Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
+                LineStatus::Added => Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(ratatui::style::Modifier::BOLD),
                 LineStatus::Unchanged => Style::default().fg(Color::DarkGray),
             };
             let diff_symbol = match line_status {

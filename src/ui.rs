@@ -54,7 +54,7 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     app.editor.adjust_viewport_offset(editor_area_chunks[1]);
 
     // Left Block の描画
-    render_left_block(f, editor_area_chunks[0], app);
+    render_left_block(f, editor_area_chunks[0], editor_area_chunks[1], app);
 
     // Editor Block の描画
     render_editor_block(f, editor_area_chunks[1], app);
