@@ -52,8 +52,8 @@ pub struct App {
     pub target_path: Option<PathBuf>,
     pub temp_path: Option<PathBuf>,
     pub clipboard: Option<String>,
-    pub messages: Vec<(MessageType, String, Instant)>,
-    pub original_buffer: String,
+    pub messages: Vec<(MessageType, String, Instant)>, // (type, message, timestamp)
+    pub original_lines: Vec<String>,
     pub word_wrap_enabled: bool,
     pub line_statuses: Vec<LineStatus>,
     pub exit_popup_state: Option<ExitPopupState>,
@@ -77,7 +77,7 @@ impl Default for App {
             temp_path: None,
             clipboard: None,
             messages: Vec::new(),
-            original_buffer: String::new(),
+            original_lines: Vec::new(),
             word_wrap_enabled: false,
             line_statuses: Vec::new(),
             exit_popup_state: None,
@@ -144,7 +144,7 @@ impl App {
             msg!(
                 app,
                 "ファイルの行数: {}",
-                app.editor.buffer.lines().collect::<Vec<&str>>().len()
+                app.editor.lines.len()
             );
 
             // まず一時ファイルからの読み込みを試みる
@@ -156,7 +156,7 @@ impl App {
                             "一時ファイル {:?} から正常に読み込みました。",
                             temp_path
                         );
-                        app.original_buffer = app.editor.buffer.clone();
+                        app.original_lines = app.editor.lines.clone();
                     }
                     Err(e) => {
                         emsg!(
@@ -173,7 +173,7 @@ impl App {
                                         "元のファイル {:?} を正常に読み込みました。",
                                         original_path
                                     );
-                                    app.original_buffer = app.editor.buffer.clone();
+                                    app.original_lines = app.editor.lines.clone();
                                     if let Err(e) = app.editor.save_to_file(&temp_path) {
                                         emsg!(
                                             app,
@@ -227,7 +227,7 @@ impl App {
                                 "元のファイル {:?} を正常に読み込みました。",
                                 original_path
                             );
-                            app.original_buffer = app.editor.buffer.clone();
+                            app.original_lines = app.editor.lines.clone();
                             if let Err(e) = app.editor.save_to_file(&temp_path) {
                                 emsg!(
                                     app,
@@ -279,12 +279,7 @@ impl App {
 
         // ファイル内容とパスに基づいてシンタックスを決定
         let first_lines: String = app
-            .editor
-            .buffer
-            .lines()
-            .take(5)
-            .collect::<Vec<&str>>()
-            .join("\n");
+            .editor.lines.iter().take(5).map(|s| s.as_str()).collect::<Vec<&str>>().join("\n");
         let syntax = app
             .highlighter
             .get_syntax_for_file(app.target_path.as_deref(), &first_lines);
@@ -300,7 +295,7 @@ impl App {
         if let Some(original_path) = &self.target_path {
             self.editor.save_to_file(original_path)?;
             msg!(self, "ファイルは {:?} に保存されました。", original_path);
-            self.original_buffer = self.editor.buffer.clone();
+            self.original_lines = self.editor.lines.clone();
             self.calculate_diff_status();
 
             Ok(())
@@ -323,8 +318,8 @@ impl App {
     /// 現在のバッファとオリジナルバッファを比較し、各行の差分状態を計算します。
     pub fn calculate_diff_status(&mut self) {
         self.line_statuses.clear();
-        let original_lines: Vec<&str> = self.original_buffer.lines().collect();
-        let current_lines: Vec<&str> = self.editor.buffer.lines().collect();
+        let original_lines: &Vec<String> = &self.original_lines;
+        let current_lines: &Vec<String> = &self.editor.lines;
 
         for (i, current_line) in current_lines.iter().enumerate() {
             if let Some(original_line) = original_lines.get(i) {
@@ -352,7 +347,7 @@ impl App {
 
     /// 未保存の変更があるかどうかをチェックします。
     pub fn has_unsaved_changes(&self) -> bool {
-        self.editor.buffer != self.original_buffer
+        self.editor.lines != self.original_lines
     }
 
     /// 終了を試みます。未保存の変更がある場合はポップアップを表示する状態に設定します。

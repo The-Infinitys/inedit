@@ -10,14 +10,14 @@ use ratatui::{
 /// Right Block を描画します。スクロールバーと差分マーカーを表示します。
 pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
     // --- 修正: visual line数ベースで計算 ---
-    let editor_area_width = crate::components::middle_block::left_block::get_editor_area_width(area);
-    let wrap_width = if app.word_wrap_enabled {
-        editor_area_width as usize
-    } else {
-        usize::MAX
-    };
-    let visual_lines = app.editor.get_visual_lines_with_width_word_wrap(wrap_width);
-    let visual_lines_count = visual_lines.len() as u16;
+    let editor_content_width = crate::components::middle_block::left_block::get_editor_area_width(area);
+    let mut total_visual_lines: u16 = 0;
+    for logical_line_idx in 0..app.editor.lines.len() {
+        total_visual_lines += app.editor.get_visual_lines_for_logical_line(
+            logical_line_idx,
+            editor_content_width,
+        ).len() as u16;
+    }
     let viewport_height = area.height;
 
     let mut scrollbar_content: Vec<Line> = Vec::new();
@@ -26,16 +26,16 @@ pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
     let theme_bg = app.highlighter.get_background_color();
 
     // スクロールバーの「つまみ」の位置とサイズを計算
-    let thumb_height = if visual_lines_count > 0 {
-        ((viewport_height as f32 / visual_lines_count as f32) * viewport_height as f32) as u16
+    let thumb_height = if total_visual_lines > 0 {
+        ((viewport_height as f32 / total_visual_lines as f32) * viewport_height as f32) as u16
     } else {
         0
     };
     let thumb_height = thumb_height.max(1); // 最小1文字の高さ
 
     // つまみの上端位置
-    let thumb_start_y = if visual_lines_count > 0 {
-        ((app.editor.scroll_offset_y as f32 / visual_lines_count as f32) * viewport_height as f32) as u16
+    let thumb_start_y = if total_visual_lines > 0 {
+        ((app.editor.scroll_offset_visual_y as f32 / total_visual_lines as f32) * viewport_height as f32) as u16
     } else {
         0
     };
@@ -59,16 +59,31 @@ pub fn render_right_block(f: &mut Frame, area: Rect, app: &App) {
         )); // スクロールバーの色は固定
 
         // 差分マーカーの描画 (visual lineに対応する論理行で判定)
-        let visual_idx = (app.editor.scroll_offset_y + y_on_screen) as usize;
-        let buf_idx = if visual_idx < visual_lines.len() {
-            visual_lines[visual_idx].0
-        } else {
-            usize::MAX
-        };
-        if buf_idx != usize::MAX {
+        let current_visual_y_on_screen = app.editor.scroll_offset_visual_y + y_on_screen;
+        let mut logical_line_for_marker: Option<usize> = None;
+        let mut visual_line_counter_for_marker: u16 = 0;
+
+        'find_logical_line: for logical_idx in 0..app.editor.lines.len() {
+            let wrapped_segments = app.editor.get_visual_lines_for_logical_line(
+                logical_idx,
+                editor_content_width,
+            );
+            for (wrap_idx, _segment) in wrapped_segments.iter().enumerate() {
+                if visual_line_counter_for_marker == current_visual_y_on_screen {
+                    // Only show diff marker for the first visual line of a logical line
+                    if wrap_idx == 0 {
+                        logical_line_for_marker = Some(logical_idx);
+                    }
+                    break 'find_logical_line;
+                }
+                visual_line_counter_for_marker += 1;
+            }
+        }
+
+        if let Some(logical_idx) = logical_line_for_marker {
             let status = app
                 .line_statuses
-                .get(buf_idx)
+                .get(logical_idx)
                 .copied()
                 .unwrap_or(LineStatus::Unchanged);
 
