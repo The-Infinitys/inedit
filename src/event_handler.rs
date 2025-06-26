@@ -125,7 +125,7 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
                     popup_state.input_mode = true;
                     popup_state.input_text.clear();
                 }
-                return Ok(AppControlFlow::ShowExitPopup);
+                return Ok(AppControlFlow::Continue);
             }
             match app.save_current_file() {
                 Ok(_) => msg!(app, "ファイルが正常に保存されました。"),
