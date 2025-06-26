@@ -117,9 +117,17 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
         // 該当するビジュアル行の文字列スライスを取得します。
         let (_, _, line_str) = &visual_lines[cursor_visual_idx];
 
-        // バイトオフセットを、ターミナル上での表示幅（カラム数）に変換します。
-        // これにより、全角文字などが正しく扱われます。
-        let byte_offset = cursor_x_byte_offset.min(line_str.len());
+        // `get_cursor_visual_position`が返す`cursor_x_byte_offset`は、カーソルの
+        // 文字数ベースの位置（何文字目か）を示していると解釈します。
+        // これをUTF-8文字列における正しいバイトオフセットに変換し、
+        // マルチバイト文字を正しく扱えるようにします。
+        let target_char_count = cursor_x_byte_offset;
+        let byte_offset = line_str
+            .char_indices()
+            .nth(target_char_count)
+            .map(|(idx, _)| idx)
+            .unwrap_or(line_str.len());
+
         let cursor_x_in_visual = Span::from(&line_str[..byte_offset]).width();
 
         // カーソルの画面上のY座標を計算します（垂直スクロールを考慮）。
