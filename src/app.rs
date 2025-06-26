@@ -41,9 +41,21 @@ pub enum AppControlFlow {
 
 pub enum InputOverlay {
     None,
-    Search { query: String, cursor: usize },
-    Replace { query: String, replace: String, cursor: usize, focus_replace: bool },
-    Suggest { prefix: String, suggestions: Vec<String>, selected: usize },
+    Search {
+        query: String,
+        cursor: usize,
+    },
+    Replace {
+        query: String,
+        replace: String,
+        cursor: usize,
+        focus_replace: bool,
+    },
+    Suggest {
+        prefix: String,
+        suggestions: Vec<String>,
+        selected: usize,
+    },
 }
 
 /// アプリケーション全体の状態を管理します。
@@ -72,7 +84,7 @@ impl Default for App {
         highlighter.set_theme(&config.color_theme);
 
         Self {
-            editor: Editor::new(String::new()),
+            editor: Editor::new(String::from("\n")),
             target_path: None,
             temp_path: None,
             clipboard: None,

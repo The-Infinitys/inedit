@@ -8,9 +8,10 @@ use ratatui::{
 };
 
 /// Right Block を描画します。スクロールバーと差分マーカーを表示します。
-pub fn render_right_block(f: &mut Frame, area: Rect,editor_area:Rect, app: &App) {
+pub fn render_right_block(f: &mut Frame, area: Rect, editor_area: Rect, app: &App) {
     // --- 修正: visual line数ベースで計算 ---
-    let editor_area_width = crate::components::middle_block::left_block::get_editor_area_width(editor_area);
+    let editor_area_width =
+        crate::components::middle_block::left_block::get_editor_area_width(editor_area);
     let wrap_width = if app.word_wrap_enabled {
         editor_area_width as usize
     } else {
@@ -34,7 +35,8 @@ pub fn render_right_block(f: &mut Frame, area: Rect,editor_area:Rect, app: &App)
 
     // つまみの上端位置
     let thumb_start_y = if visual_lines_count > 0 {
-        ((app.editor.scroll_offset_y as f32 / visual_lines_count as f32) * viewport_height as f32) as u16
+        ((app.editor.scroll_offset_y as f32 / visual_lines_count as f32) * viewport_height as f32)
+            as u16
     } else {
         0
     };

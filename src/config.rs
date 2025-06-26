@@ -236,11 +236,8 @@ pub fn load_or_create_config() -> Config {
 /// 設定をファイルに保存します。
 pub fn save_config(config: &Config) -> io::Result<()> {
     if let Some(config_path) = get_config_path() {
-        let yaml_content = serde_yaml::to_string(config).map_err(|e| {
-            io::Error::other(
-                format!("Failed to serialize config: {}", e),
-            )
-        })?;
+        let yaml_content = serde_yaml::to_string(config)
+            .map_err(|e| io::Error::other(format!("Failed to serialize config: {}", e)))?;
         fs::write(&config_path, yaml_content)?;
         // eprintln!("Config saved to {:?}", config_path);
         Ok(())

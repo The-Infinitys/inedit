@@ -1,3 +1,5 @@
+use crate::app::App;
+use crate::app::InputOverlay;
 use ratatui::{
     Frame,
     layout::Rect,
@@ -5,8 +7,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-use crate::app::InputOverlay;
-use crate::app::App;
 
 /// サジェストバーや検索・置換バーなどのオーバーレイUIを描画します。
 pub fn render_overlay(f: &mut Frame, app: &App) {
@@ -22,7 +22,12 @@ pub fn render_overlay(f: &mut Frame, app: &App) {
             let para = Paragraph::new(text).block(Block::default().borders(Borders::ALL));
             f.render_widget(para, area);
         }
-        InputOverlay::Replace { query, replace, focus_replace, .. } => {
+        InputOverlay::Replace {
+            query,
+            replace,
+            focus_replace,
+            ..
+        } => {
             let area = Rect {
                 x: 0,
                 y: f.area().height - 3,
@@ -38,7 +43,11 @@ pub fn render_overlay(f: &mut Frame, app: &App) {
             let para = Paragraph::new(text).block(Block::default().borders(Borders::ALL));
             f.render_widget(para, area);
         }
-        InputOverlay::Suggest { suggestions, selected, .. } => {
+        InputOverlay::Suggest {
+            suggestions,
+            selected,
+            ..
+        } => {
             let area = Rect {
                 x: 10,
                 y: f.area().height - 5,
@@ -48,7 +57,10 @@ pub fn render_overlay(f: &mut Frame, app: &App) {
             let mut lines = vec![];
             for (i, s) in suggestions.iter().enumerate() {
                 if i == *selected {
-                    lines.push(Line::from(Span::styled(s, Style::default().bg(Color::Blue))));
+                    lines.push(Line::from(Span::styled(
+                        s,
+                        Style::default().bg(Color::Blue),
+                    )));
                 } else {
                     lines.push(Line::from(s.as_str()));
                 }

@@ -20,7 +20,7 @@ pub struct Editor {
     pub current_search_idx: Option<usize>, // 現在の検索結果のインデックス
     pub scroll_offset_y: u16,            // 垂直方向のスクロールオフセット (行単位)
     pub scroll_offset_x: u16,            // 水平方向のスクロールオフセット (文字単位)
-    pub cursor_wrap_idx: usize, // 折返しインデックスを追加
+    pub cursor_wrap_idx: usize,          // 折返しインデックスを追加
     undo_stack: Vec<String>,
     redo_stack: Vec<String>,
 }
@@ -184,16 +184,32 @@ impl Editor {
 
     /// カーソルを次の行に移動します。
     pub fn next_line(&mut self, extend_selection: bool) {
-        let potential_y = self.cursor.get_potential_next_line_y();
-        let current_x = self.cursor.x; // 現在のX座標を維持しようとする
-        self.set_cursor_position(current_x, potential_y, extend_selection);
+        let num_lines = self.buffer.lines().count() as u16;
+        let current_y = self.cursor.y;
+
+        if current_y < num_lines.saturating_sub(1) {
+            // 次の行が存在する場合
+            let potential_y = self.cursor.get_potential_next_line_y();
+            let current_x = self.cursor.x; // 現在のX座標を維持しようとする
+            self.set_cursor_position(current_x, potential_y, extend_selection);
+        } else {
+            // 次の行がない（最終行にいる）かバッファが空の場合、ドキュメントの末尾に移動
+            self.move_cursor_to_document_end(extend_selection);
+        }
     }
 
     /// カーソルを前の行に移動します。
     pub fn previous_line(&mut self, extend_selection: bool) {
-        let potential_y = self.cursor.get_potential_previous_line_y();
-        let current_x = self.cursor.x; // 現在のX座標を維持しようとする
-        self.set_cursor_position(current_x, potential_y, extend_selection);
+        let current_y = self.cursor.y;
+        if current_y > 0 {
+            // 前の行が存在する場合
+            let potential_y = self.cursor.get_potential_previous_line_y();
+            let current_x = self.cursor.x; // 現在のX座標を維持しようとする
+            self.set_cursor_position(current_x, potential_y, extend_selection);
+        } else {
+            // 前の行がない（先頭行にいる）場合、ドキュメントの先頭に移動
+            self.move_cursor_to_document_start(extend_selection);
+        }
     }
 
     /// カーソルを次の文字に移動します。
@@ -906,7 +922,8 @@ impl Editor {
                 self.cursor.x = x;
                 self.cursor.y = *next_buf_idx as u16;
                 self.cursor_wrap_idx = *next_wrap_idx;
-                self.cursor.update_position(x, *next_buf_idx as u16, extend_selection);
+                self.cursor
+                    .update_position(x, *next_buf_idx as u16, extend_selection);
             }
         }
     }
@@ -926,7 +943,8 @@ impl Editor {
                 self.cursor.x = x;
                 self.cursor.y = *prev_buf_idx as u16;
                 self.cursor_wrap_idx = *prev_wrap_idx;
-                self.cursor.update_position(x, *prev_buf_idx as u16, extend_selection);
+                self.cursor
+                    .update_position(x, *prev_buf_idx as u16, extend_selection);
             }
         }
     }
@@ -961,7 +979,9 @@ impl Editor {
                     visual = format!("{}{}", indent, visual);
                 }
                 result.push((buf_idx, wrap_idx, visual));
-                if end == chars.len() { break; }
+                if end == chars.len() {
+                    break;
+                }
                 start = end;
                 wrap_idx += 1;
             }
@@ -969,7 +989,10 @@ impl Editor {
         result
     }
     /// 指定幅でwrapしたvisual linesを返す（インデント保持、単語単位wrap）
-    pub fn get_visual_lines_with_width_word_wrap(&self, wrap_width: usize) -> Vec<(usize, usize, String)> {
+    pub fn get_visual_lines_with_width_word_wrap(
+        &self,
+        wrap_width: usize,
+    ) -> Vec<(usize, usize, String)> {
         let mut result = Vec::new();
         let lines: Vec<&str> = self.buffer.lines().collect();
         for (buf_idx, line) in lines.iter().enumerate() {
@@ -991,7 +1014,15 @@ impl Editor {
                 };
                 if available_width == 0 || available_width == usize::MAX {
                     let visual = chars[current..].iter().collect::<String>();
-                    result.push((buf_idx, wrap_idx, if first { visual.clone() } else { format!("{}{}", indent, visual) }));
+                    result.push((
+                        buf_idx,
+                        wrap_idx,
+                        if first {
+                            visual.clone()
+                        } else {
+                            format!("{}{}", indent, visual)
+                        },
+                    ));
                     break;
                 }
                 // 単語単位でwrap
@@ -1001,12 +1032,12 @@ impl Editor {
                 } else {
                     // 途中で単語が切れる場合、直前の空白まで戻す
                     let mut back = end;
-                    while back > current && !chars[back-1].is_whitespace() {
+                    while back > current && !chars[back - 1].is_whitespace() {
                         back -= 1;
                     }
                     if back > current {
                         end = back;
-                      }
+                    }
                 }
                 if end == current {
                     // 1単語がwrap幅を超える場合は強制分割
@@ -1017,7 +1048,9 @@ impl Editor {
                     visual = format!("{}{}", indent, visual);
                 }
                 result.push((buf_idx, wrap_idx, visual));
-                if end == chars.len() { break; }
+                if end == chars.len() {
+                    break;
+                }
                 current = end;
                 wrap_idx += 1;
                 first = false;
@@ -1027,9 +1060,16 @@ impl Editor {
     }
 
     /// 指定したvisual lineのグローバルバイトオフセットを返す（word wrap対応）
-    pub fn get_visual_line_global_offset(&self, buf_idx: usize, wrap_idx: usize, wrap_width: usize) -> usize {
+    pub fn get_visual_line_global_offset(
+        &self,
+        buf_idx: usize,
+        wrap_idx: usize,
+        wrap_width: usize,
+    ) -> usize {
         let lines: Vec<&str> = self.buffer.lines().collect();
-        if buf_idx >= lines.len() { return 0; }
+        if buf_idx >= lines.len() {
+            return 0;
+        }
         let mut offset = 0;
         // buf_idxまでの全行のバイト数+改行
         for i in 0..buf_idx {
@@ -1053,7 +1093,7 @@ impl Editor {
                 end = chars.len();
             } else {
                 let mut back = end;
-                while back > current && !chars[back-1].is_whitespace() {
+                while back > current && !chars[back - 1].is_whitespace() {
                     back -= 1;
                 }
                 if back > current {
