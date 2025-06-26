@@ -1115,15 +1115,58 @@ impl Editor {
     /// 現在のカーソル位置がvisual_linesの何番目か、その中で何文字目かを返す（word wrap対応）
     pub fn get_cursor_visual_position(&self, wrap_width: usize) -> (usize, usize) {
         let visual_lines = self.get_visual_lines_with_width_word_wrap(wrap_width);
-        for (i, (buf_idx, wrap_idx, line_str)) in visual_lines.iter().enumerate() {
-            if *buf_idx == self.cursor.y as usize && *wrap_idx == self.cursor_wrap_idx {
-                // カーソルのxはwrap_idx区間内での相対位置
-                let indent_len = line_str.chars().take_while(|c| c.is_whitespace()).count();
-                let start = if *wrap_idx == 0 { 0 } else { indent_len };
-                let rel_x = self.cursor.x.saturating_sub(start as u16) as usize;
-                return (i, rel_x.min(line_str.chars().count()));
+        let logical_line_str = self.buffer.lines().nth(self.cursor.y as usize).unwrap_or("");
+
+        // カーソルの論理的なX座標（文字数）
+        let target_char_x = self.cursor.x as usize;
+
+        // 現在の論理行の中で、これまでに処理した文字数
+        let mut logical_chars_processed = 0;
+
+        for (visual_line_idx, (buf_idx, wrap_idx, v_line_str)) in visual_lines.iter().enumerate() {
+            // カーソルの論理行に対応するビジュアル行のみを処理
+            if *buf_idx != self.cursor.y as usize {
+                continue;
             }
+
+            // このビジュアル行に含まれる、元の論理行からの実際の文字数を計算
+            // 折り返し行にはインデントが追加されているため、その分を引く
+            let v_line_content_len = if *wrap_idx > 0 {
+                let indent_len = logical_line_str.chars().take_while(|c| c.is_whitespace()).count();
+                v_line_str.chars().count().saturating_sub(indent_len)
+            } else {
+                v_line_str.chars().count()
+            };
+
+            // カーソルの論理X座標がこのビジュアル行の範囲内にあるかチェック
+            //（カーソルは行末にも置けるため <= で比較）
+            if target_char_x <= logical_chars_processed + v_line_content_len {
+                // このビジュアル行にカーソルがある
+                // ビジュアル行のコンテンツ内での相対的なX座標を計算
+                let relative_x_in_content = target_char_x - logical_chars_processed;
+
+                // 折り返し行の場合、追加されたインデントの長さを足して最終的なビジュアルX座標を求める
+                let final_visual_x = if *wrap_idx > 0 {
+                    let indent_len = logical_line_str.chars().take_while(|c| c.is_whitespace()).count();
+                    relative_x_in_content + indent_len
+                } else {
+                    relative_x_in_content
+                };
+                return (visual_line_idx, final_visual_x);
+            }
+            logical_chars_processed += v_line_content_len;
         }
-        (0, 0)
+
+        // フォールバック: カーソルが論理行の末尾を越えている場合、その論理行の最後のビジュアル行の末尾に配置
+        if let Some((last_v_line_idx, (_, _, last_v_line_str))) = visual_lines
+            .iter()
+            .enumerate()
+            .filter(|(_, (buf_idx, _, _))| *buf_idx == self.cursor.y as usize)
+            .last()
+        {
+            return (last_v_line_idx, last_v_line_str.chars().count());
+        }
+
+        (0, 0) // 最終フォールバック
     }
 }
