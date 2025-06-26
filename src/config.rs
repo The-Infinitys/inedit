@@ -117,7 +117,7 @@ impl KeyEventConfig {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            color_theme: "Solarized (dark)".to_string(), // デフォルトのテーマ名
+            color_theme: "Default Readable".to_string(), // デフォルトのテーマ名
             key_bindings: KeyBindings::default(),
         }
     }
