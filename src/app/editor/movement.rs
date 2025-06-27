@@ -352,12 +352,11 @@ impl Editor {
         }
     }
 
-    /// 現在のカーソル位置がvisual_linesの何番目か、その中で何文字目かを返す（word wrap対応）
-    pub fn get_cursor_visual_position(&self, wrap_width: usize) -> (usize, usize) {
-        // 1. ビジュアル行のリストを取得
-        let visual_lines = self.get_visual_lines_with_width_word_wrap(wrap_width);
-
-        // 2. カーソルのある論理行を取得
+    /// 事前に計算されたvisual_linesを使って、カーソルのビジュアル位置を返します。
+    /// これにより、visual_linesの再計算を防ぎ、パフォーマンスを向上させます。
+    pub fn get_cursor_visual_position_from_lines(
+        &self, visual_lines: &[(usize, usize, String)]
+    ) -> (usize, usize) {
         let logical_line_str = self
             .buffer
             .lines()
@@ -414,5 +413,14 @@ impl Editor {
         }
 
         (0, 0) // 最終フォールバック
+    }
+
+    /// 現在のカーソル位置がvisual_linesの何番目か、その中で何文字目かを返す（word wrap対応）
+    /// 内部でvisual_linesを計算します。
+    pub fn get_cursor_visual_position(&self, wrap_width: usize) -> (usize, usize) {
+        // 1. ビジュアル行のリストを取得
+        let visual_lines = self.get_visual_lines_with_width_word_wrap(wrap_width);
+        // 2. 事前に計算したリストを使って位置を計算
+        self.get_cursor_visual_position_from_lines(&visual_lines)
     }
 }

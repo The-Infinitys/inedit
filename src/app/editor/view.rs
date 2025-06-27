@@ -1,89 +1,110 @@
 use super::Editor;
-use ratatui::{layout::Rect, text::Line as RatatuiLine};
+use ratatui::layout::Rect;
 
 impl Editor {
     /// 描画領域のサイズに基づいてスクロールオフセットを調整し、カーソルが見えるようにします。
-    ///
-    /// **重要:** このメソッドは`scroll_offset_y`と`scroll_offset_x`を設定します。
-    /// 実際の描画を行う際は、`scroll_offset_y`から始まり、`scroll_offset_y + viewport_area.height`までの行を描画するのではなく、
-    /// 必ず `self.buffer.lines().count()`（バッファの実際の行数）を超えないようにしてください。
-    /// 例えば、`for i in self.scroll_offset_y .. min(self.scroll_offset_y + viewport_area.height, self.buffer.lines().count() as u16)`
-    /// のようにループの終端を制限することで、存在しない行が表示されるのを防ぐことができます。
-    pub fn adjust_viewport_offset(&mut self, viewport_area: Rect) {
-        let cursor_y = self.cursor.y;
-        let cursor_x_logical = self.cursor.x; // 論理的な文字インデックス
+    pub fn adjust_viewport_offset(&mut self, viewport_area: Rect, word_wrap_enabled: bool) {
         let viewport_height = viewport_area.height;
         let viewport_width = viewport_area.width;
-
         const PADDING_Y: u16 = 3; // 垂直方向のパディング
-        const PADDING_X: u16 = 5; // 水平方向のパディング
 
-        // 垂直スクロール (Y軸)
-        // カーソルが上端に近づいた場合
-        if cursor_y < self.scroll_offset_y + PADDING_Y {
-            self.scroll_offset_y = cursor_y.saturating_sub(PADDING_Y);
-        }
-        // カーソルが下端に近づいた場合
-        if cursor_y >= self.scroll_offset_y + viewport_height.saturating_sub(PADDING_Y) {
-            self.scroll_offset_y = cursor_y
-                .saturating_add(1)
-                .saturating_sub(viewport_height)
-                .saturating_add(PADDING_Y);
-        }
+        if word_wrap_enabled {
+            // --- Wrap Mode ON ---
+            // 1. Get visual lines and cursor position to avoid re-calculation
+            let visual_lines = self.get_visual_lines_with_width_word_wrap(viewport_width as usize);
+            let (visual_cursor_y, _) =
+                self.get_cursor_visual_position_from_lines(&visual_lines);
+            let visual_cursor_y = visual_cursor_y as u16;
 
-        // 水平スクロール (X軸) - 行の長さとUnicode幅も考慮
-        let lines: Vec<&str> = self.buffer.lines().collect();
-        let current_line_content = if (cursor_y as usize) < lines.len() {
-            lines[cursor_y as usize]
+            // 2. Adjust vertical scroll based on visual position
+            if visual_cursor_y < self.scroll_offset_y + PADDING_Y {
+                self.scroll_offset_y = visual_cursor_y.saturating_sub(PADDING_Y);
+            }
+            if visual_cursor_y >= self.scroll_offset_y + viewport_height.saturating_sub(PADDING_Y) {
+                self.scroll_offset_y = visual_cursor_y
+                    .saturating_add(1)
+                    .saturating_sub(viewport_height)
+                    .saturating_add(PADDING_Y);
+            }
+
+            // 3. Clamp scroll offset with total visual lines
+            let total_visual_lines = visual_lines.len() as u16;
+
+            if total_visual_lines > viewport_height {
+                self.scroll_offset_y = self
+                    .scroll_offset_y
+                    .min(total_visual_lines.saturating_sub(viewport_height));
+            } else {
+                self.scroll_offset_y = 0;
+            }
+
+            // In wrap mode, horizontal scroll is always 0.
+            self.scroll_offset_x = 0;
         } else {
-            ""
-        };
+            // --- Wrap Mode OFF ---
+            let cursor_y = self.cursor.y;
+            let cursor_x_logical = self.cursor.x;
+            const PADDING_X: u16 = 5; // 水平方向のパディング
 
-        // カーソルの論理X位置 (cursor_x_logical) までの部分文字列の視覚的な幅（セル数）を計算
-        let visual_cursor_x_on_line = RatatuiLine::from(
-            current_line_content
+            // Vertical scroll (Y-axis)
+            if cursor_y < self.scroll_offset_y + PADDING_Y {
+                self.scroll_offset_y = cursor_y.saturating_sub(PADDING_Y);
+            }
+            if cursor_y >= self.scroll_offset_y + viewport_height.saturating_sub(PADDING_Y) {
+                self.scroll_offset_y = cursor_y
+                    .saturating_add(1)
+                    .saturating_sub(viewport_height)
+                    .saturating_add(PADDING_Y);
+            }
+
+            // Horizontal scroll (X-axis)
+            let lines: Vec<&str> = self.buffer.lines().collect();
+            let current_line_content = if (cursor_y as usize) < lines.len() {
+                lines[cursor_y as usize]
+            } else {
+                ""
+            };
+
+            // Calculate visual width considering tabs as 4 spaces
+            let prefix_logical = current_line_content
                 .chars()
                 .take(cursor_x_logical as usize)
-                .collect::<String>(),
-        )
-        .width() as u16;
+                .collect::<String>();
+            let visual_cursor_x_on_line =
+                prefix_logical.replace('\t', "    ").chars().count() as u16;
+            let current_line_visual_width =
+                current_line_content.replace('\t', "    ").chars().count() as u16;
 
-        // 現在の行の全幅も計算（スクロール範囲の調整用）
-        let current_line_visual_width = RatatuiLine::from(current_line_content).width() as u16;
+            if visual_cursor_x_on_line < self.scroll_offset_x + PADDING_X {
+                self.scroll_offset_x = visual_cursor_x_on_line.saturating_sub(PADDING_X);
+            } else if visual_cursor_x_on_line
+                >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X)
+            {
+                self.scroll_offset_x = visual_cursor_x_on_line
+                    .saturating_add(1)
+                    .saturating_sub(viewport_width)
+                    .saturating_add(PADDING_X);
+            }
 
-        if visual_cursor_x_on_line < self.scroll_offset_x + PADDING_X {
-            // カーソルがビューポートの左端より左に移動した場合
-            self.scroll_offset_x = visual_cursor_x_on_line.saturating_sub(PADDING_X);
-        } else if visual_cursor_x_on_line
-            >= self.scroll_offset_x + viewport_width.saturating_sub(PADDING_X)
-        {
-            // カーソルがビューポートの右端より右に移動した場合
-            // カーソル自体を含めるため、少なくとも1セル分動かすことを考慮（正確な幅はParagraphが計算する）
-            self.scroll_offset_x = visual_cursor_x_on_line
-                .saturating_add(1)
-                .saturating_sub(viewport_width)
-                .saturating_add(PADDING_X);
+            // Clamp vertical scroll
+            let total_lines = self.buffer.lines().count() as u16;
+            if total_lines > viewport_height {
+                self.scroll_offset_y = self
+                    .scroll_offset_y
+                    .min(total_lines.saturating_sub(viewport_height));
+            } else {
+                self.scroll_offset_y = 0;
+            }
+
+            // Clamp horizontal scroll
+            if current_line_visual_width > viewport_width {
+                self.scroll_offset_x = self
+                    .scroll_offset_x
+                    .min(current_line_visual_width.saturating_sub(viewport_width));
+            } else {
+                self.scroll_offset_x = 0;
+            }
         }
-
-        // スクロールオフセットがマイナスにならないように、またバッファの範囲を超えないように調整
-        let total_lines = self.buffer.lines().count() as u16;
-        if total_lines > viewport_height {
-            self.scroll_offset_y = self
-                .scroll_offset_y
-                .min(total_lines.saturating_sub(viewport_height));
-        } else {
-            self.scroll_offset_y = 0; // コンテンツがビューポートより短い場合、垂直スクロールは不要
-        }
-
-        if current_line_visual_width > viewport_width {
-            self.scroll_offset_x = self
-                .scroll_offset_x
-                .min(current_line_visual_width.saturating_sub(viewport_width));
-        } else {
-            self.scroll_offset_x = 0; // 現在の行がビューポートより短い場合、水平スクロールは不要
-        }
-
-        // スクロールオフセットは常に0以上であることを保証
     }
 
     /// 折返しモード用: ビューポート高さに合わせた画面上の行リストを返す
