@@ -98,9 +98,10 @@ impl Editor {
                 result.push((buf_idx, 0, String::new()));
                 continue;
             }
+            let line_with_spaces = line.replace('\t', "    ");
             let mut start = 0;
             let mut wrap_idx = 0;
-            let chars: Vec<char> = line.chars().collect();
+            let chars: Vec<char> = line_with_spaces.chars().collect();
             while start < chars.len() {
                 let end = (start + wrap_width).min(chars.len());
                 let visual = chars[start..end].iter().collect::<String>();
@@ -120,11 +121,12 @@ impl Editor {
                 result.push((buf_idx, 0, String::new()));
                 continue;
             }
+            let line_with_spaces = line.replace('\t', "    ");
             // インデント部分を抽出
-            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            let indent: String = line_with_spaces.chars().take_while(|c| c.is_whitespace()).collect();
             let mut start = 0;
             let mut wrap_idx = 0;
-            let chars: Vec<char> = line.chars().collect();
+            let chars: Vec<char> = line_with_spaces.chars().collect();
             while start < chars.len() {
                 let is_first = wrap_idx == 0;
                 let available_width = if is_first || wrap_width == usize::MAX {
@@ -163,11 +165,12 @@ impl Editor {
                 result.push((buf_idx, 0, String::new()));
                 continue;
             }
+            let line_with_spaces = line.replace('\t', "    ");
             // インデント部分を抽出
-            let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+            let indent: String = line_with_spaces.chars().take_while(|c| c.is_whitespace()).collect();
             let mut wrap_idx = 0;
             let mut current = 0;
-            let chars: Vec<char> = line.chars().collect();
+            let chars: Vec<char> = line_with_spaces.chars().collect();
             let mut first = true;
             while current < chars.len() {
                 let available_width = if first || wrap_width == usize::MAX {
