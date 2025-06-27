@@ -4,8 +4,9 @@ pub mod movement;
 pub mod search;
 pub mod suggest;
 pub mod view;
+pub mod cursor;
 
-use super::cursor::Cursor;
+use cursor::Cursor;
 use std::fs;
 use std::io;
 use std::path::Path;
