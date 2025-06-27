@@ -12,8 +12,7 @@ impl Editor {
             // --- Wrap Mode ON ---
             // 1. Get visual lines and cursor position to avoid re-calculation
             let visual_lines = self.get_visual_lines_with_width_word_wrap(viewport_width as usize);
-            let (visual_cursor_y, _) =
-                self.get_cursor_visual_position_from_lines(&visual_lines);
+            let (visual_cursor_y, _) = self.get_cursor_visual_position_from_lines(&visual_lines);
             let visual_cursor_y = visual_cursor_y as u16;
 
             // 2. Adjust vertical scroll based on visual position
@@ -144,7 +143,10 @@ impl Editor {
             }
             let line_with_spaces = line.replace('\t', "    ");
             // インデント部分を抽出
-            let indent: String = line_with_spaces.chars().take_while(|c| c.is_whitespace()).collect();
+            let indent: String = line_with_spaces
+                .chars()
+                .take_while(|c| c.is_whitespace())
+                .collect();
             let mut start = 0;
             let mut wrap_idx = 0;
             let chars: Vec<char> = line_with_spaces.chars().collect();
@@ -188,7 +190,10 @@ impl Editor {
             }
             let line_with_spaces = line.replace('\t', "    ");
             // インデント部分を抽出
-            let indent: String = line_with_spaces.chars().take_while(|c| c.is_whitespace()).collect();
+            let indent: String = line_with_spaces
+                .chars()
+                .take_while(|c| c.is_whitespace())
+                .collect();
             let mut wrap_idx = 0;
             let mut current = 0;
             let chars: Vec<char> = line_with_spaces.chars().collect();
@@ -259,8 +264,8 @@ impl Editor {
         }
         let mut offset = 0;
         // buf_idxまでの全行のバイト数+改行
-        for i in 0..buf_idx {
-            offset += lines[i].len();
+        for line in lines.iter().take(buf_idx) {
+            offset += line.len();
             offset += 1; // 改行
         }
         // wrap_idx分だけこの行の先頭からバイト数を加算
