@@ -405,7 +405,7 @@ impl Editor {
             .iter()
             .enumerate()
             .filter(|(_, (buf_idx, _, _))| *buf_idx == self.cursor.y as usize)
-            .last()
+            .next_back()
         {
             if self.cursor.x as usize >= logical_line_str.chars().count() {
                 return (last_v_line_idx, last_v_line_str.chars().count());

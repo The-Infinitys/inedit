@@ -103,7 +103,7 @@ pub fn render_editor_block(f: &mut Frame, area: Rect, app: &App) {
         paragraph = paragraph.wrap(Wrap { trim: false });
     } else {
         // 折返し無効時はx方向スクロールを有効化
-        paragraph = paragraph.scroll((0, app.editor.scroll_offset_x as u16));
+        paragraph = paragraph.scroll((0, app.editor.scroll_offset_x));
     }
     f.render_widget(paragraph, area);
     // カーソル描画
