@@ -1,5 +1,4 @@
 // src/app.rs
-pub mod cursor;
 pub mod editor;
 pub mod features;
 pub mod msg;
