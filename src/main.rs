@@ -6,30 +6,61 @@ use crossterm::{
 use inedit::app::{App, AppControlFlow, MessageType};
 use inedit::event_handler;
 use inedit::ui;
-use ratatui::{Terminal, backend::CrosstermBackend};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, time::Duration};
+use std::panic;
+
+// Helper struct to ensure terminal cleanup on drop
+struct TerminalGuard<B: ratatui::backend::Backend + io::Write>(Terminal<B>);
+
+impl<B: ratatui::backend::Backend + io::Write> Drop for TerminalGuard<B> {
+    fn drop(&mut self) {
+        // These operations can fail, so we ignore their results.
+        let _ = disable_raw_mode();
+        let _ = execute!(self.0.backend_mut(), LeaveAlternateScreen);
+        let _ = self.0.show_cursor();
+    }
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Enable raw mode and enter alternate screen
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    let stdout = io::stdout();
+    execute!(io::stdout(), EnterAlternateScreen)?;
+
+    // Create terminal and wrap it in a guard for automatic cleanup
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    let terminal = Terminal::new(backend)?;
+    let mut terminal_guard = TerminalGuard(terminal);
 
     let mut app = App::init();
     let tick_rate = Duration::from_millis(250);
 
-    let res = run_app(&mut terminal, &mut app, tick_rate);
+    // Use catch_unwind to gracefully handle panics and ensure terminal cleanup
+    let res = panic::catch_unwind(panic::AssertUnwindSafe(move || {
+        run_app(&mut terminal_guard.0, &mut app, tick_rate)
+    }));
 
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
+    // `terminal_guard` will be dropped here, executing its `Drop` implementation
+    // which restores the terminal to its original state, regardless of whether
+    // `run_app` returned normally or panicked.
 
-    if let Err(err) = res {
-        println!("{:?}", err)
+    match res {
+        Ok(Ok(())) => Ok(()), // `run_app` completed successfully
+        Ok(Err(e)) => Err(Box::new(e)), // `run_app` returned an `io::Error`
+        Err(panic_payload) => {
+            // A panic occurred inside `run_app`
+            let panic_message = if let Some(s) = panic_payload.downcast_ref::<String>() {
+                format!("Application panicked: {}", s)
+            } else if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                format!("Application panicked: {}", s)
+            } else {
+                "Application panicked with an unknown error (payload type unknown)".to_string()
+            };
+            eprintln!("{}", panic_message);
+            Err(panic_message.into()) // Convert String to Box<dyn Error>
+        }
     }
-
-    Ok(())
 }
 
 fn run_app(

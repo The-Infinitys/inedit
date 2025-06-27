@@ -189,7 +189,7 @@ pub fn handle_event(app: &mut App, key: &KeyEvent) -> std::io::Result<AppControl
         }
         // タブ
         else if bindings.insert_tab.matches(key) {
-            app.editor.paste_text("    ");
+            app.editor.paste_text("\t");
             app.calculate_diff_status();
         }
         // 前の文字を削除

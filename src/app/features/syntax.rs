@@ -6,6 +6,7 @@ use syntect::{
     highlighting::{Color as SyntectColor, FontStyle, Style as SyntectStyle, Theme, ThemeSet},
     parsing::{SyntaxReference, SyntaxSet},
 };
+
 pub mod themes;
 /// シンタックスハイライト処理に必要なデータを保持します。
 pub struct Highlighter {
@@ -19,7 +20,7 @@ impl Default for Highlighter {
     fn default() -> Self {
         let syntax_set = SyntaxSet::load_defaults_newlines();
         let theme_set = ThemeSet::load_defaults();
-        let current_theme_name = "Solarized (dark)".to_string(); // デフォルトテーマ
+        let current_theme_name = "Default Readable".to_string(); // デフォルトテーマ
 
         let mut themes = HashMap::new();
         // ThemeSetから全てのテーマをHashMapにコピーして保持
