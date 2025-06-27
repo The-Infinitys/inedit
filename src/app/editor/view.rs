@@ -28,7 +28,6 @@ impl Editor {
 
             // 3. Clamp scroll offset with total visual lines
             let total_visual_lines = visual_lines.len() as u16;
-
             if total_visual_lines > viewport_height {
                 self.scroll_offset_y = self
                     .scroll_offset_y
